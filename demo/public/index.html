@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Semantic DOM Distiller — SDD Demo</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --bg2: #161b22;
+      --bg3: #1f2937;
+      --border: #30363d;
+      --accent: #58a6ff;
+      --accent2: #3fb950;
+      --accent3: #f78166;
+      --accent4: #d2a8ff;
+      --text: #e6edf3;
+      --text2: #8b949e;
+      --text3: #484f58;
+      --tag-bg: #1c2128;
+      --radius: 8px;
+      --shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-logo {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), var(--accent4));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 700; color: #fff;
+      flex-shrink: 0;
+    }
+    .header-title {
+      font-size: 16px; font-weight: 700;
+      background: linear-gradient(90deg, var(--accent), var(--accent4));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .header-sub {
+      font-size: 11px; color: var(--text2); margin-top: 1px;
+    }
+    .header-badge {
+      margin-left: auto;
+      background: var(--bg3); border: 1px solid var(--border);
+      color: var(--text2); font-size: 11px; padding: 3px 8px;
+      border-radius: 20px; font-family: monospace;
+    }
+    .header-badge span { color: var(--accent2); }
+
+    /* Main layout */
+    .main {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      height: calc(100vh - 61px);
+    }
+
+    /* Left panel */
+    .panel-left {
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-label {
+      font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--text2); margin-bottom: 8px;
+    }
+
+    /* URL Input */
+    .url-input-wrap {
+      display: flex; gap: 8px; align-items: center;
+    }
+    .url-input {
+      flex: 1;
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: var(--radius); color: var(--text);
+      font-size: 13px; padding: 9px 12px;
+      outline: none; transition: border 0.15s;
+    }
+    .url-input:focus { border-color: var(--accent); }
+    .url-input::placeholder { color: var(--text3); }
+
+    .btn {
+      background: var(--accent); color: #0d1117;
+      border: none; border-radius: var(--radius);
+      font-size: 13px; font-weight: 700;
+      padding: 9px 16px; cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .btn-sm {
+      padding: 5px 10px; font-size: 12px;
+    }
+    .btn-ghost {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text2);
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); opacity: 1; }
+
+    /* Quick examples */
+    .examples {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;
+    }
+    .example-btn {
+      background: var(--tag-bg); border: 1px solid var(--border);
+      color: var(--text2); font-size: 11px; padding: 3px 10px;
+      border-radius: 20px; cursor: pointer; transition: all 0.15s;
+    }
+    .example-btn:hover {
+      border-color: var(--accent); color: var(--accent);
+      background: rgba(88,166,255,0.08);
+    }
+
+    /* Options */
+    .options-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    }
+    .opt-item { display: flex; flex-direction: column; gap: 4px; }
+    .opt-label {
+      font-size: 11px; color: var(--text2); font-weight: 500;
+    }
+    .opt-input {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 12px;
+      padding: 6px 8px; outline: none; width: 100%;
+    }
+    .opt-input:focus { border-color: var(--accent); }
+
+    .range-wrap { display: flex; align-items: center; gap: 8px; }
+    .range-wrap input[type=range] { flex: 1; accent-color: var(--accent); }
+    .range-val {
+      font-family: monospace; font-size: 12px;
+      color: var(--accent); width: 30px; text-align: right;
+    }
+
+    /* Pipeline steps */
+    .pipeline {
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 12px 16px;
+    }
+    .step {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px;
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 6px; transition: all 0.2s;
+    }
+    .step.active { border-color: var(--accent); background: rgba(88,166,255,0.06); }
+    .step.done { border-color: var(--accent2); background: rgba(63,185,80,0.06); }
+    .step.error { border-color: var(--accent3); background: rgba(247,129,102,0.06); }
+    .step-icon {
+      width: 26px; height: 26px;
+      border-radius: 50%; background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; flex-shrink: 0;
+    }
+    .step.active .step-icon { animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .step-info { flex: 1; }
+    .step-name { font-size: 12px; font-weight: 600; }
+    .step-desc { font-size: 11px; color: var(--text2); }
+    .step-time { font-family: monospace; font-size: 11px; color: var(--text3); }
+
+    /* Stats cards */
+    .stats {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;
+      padding: 12px 16px;
+    }
+    .stat-card {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px;
+    }
+    .stat-val {
+      font-size: 22px; font-weight: 700;
+      background: linear-gradient(90deg, var(--accent), var(--accent4));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .stat-label { font-size: 10px; color: var(--text2); margin-top: 2px; }
+
+    /* Mode badge */
+    .mode-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 12px; font-size: 11px;
+      border: 1px solid;
+    }
+    .mode-badge.onnx { border-color: var(--accent4); color: var(--accent4); }
+    .mode-badge.heuristic { border-color: var(--accent2); color: var(--accent2); }
+
+    /* Right panel */
+    .panel-right {
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    .tabs {
+      display: flex; border-bottom: 1px solid var(--border);
+      background: var(--bg2); padding: 0 16px;
+      gap: 0;
+    }
+    .tab {
+      padding: 10px 16px; font-size: 12px; font-weight: 600;
+      color: var(--text2); cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s; user-select: none;
+    }
+    .tab.active { color: var(--accent); border-color: var(--accent); }
+    .tab:hover:not(.active) { color: var(--text); }
+
+    .tab-content {
+      flex: 1; overflow: auto; padding: 16px;
+      display: none;
+    }
+    .tab-content.active { display: block; }
+
+    /* Welcome screen */
+    .welcome {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      height: 100%; text-align: center; color: var(--text2);
+    }
+    .welcome-icon {
+      font-size: 64px; margin-bottom: 16px;
+      filter: drop-shadow(0 0 32px rgba(88,166,255,0.3));
+    }
+    .welcome h2 { font-size: 20px; color: var(--text); margin-bottom: 8px; }
+    .welcome p { font-size: 13px; max-width: 360px; line-height: 1.7; }
+    .welcome-steps {
+      display: flex; gap: 24px; margin-top: 24px;
+    }
+    .welcome-step {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 6px; font-size: 12px;
+    }
+    .welcome-step-num {
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, var(--accent), var(--accent4));
+      border-radius: 50%; display: flex; align-items: center;
+      justify-content: center; font-weight: 700; color: #fff; font-size: 13px;
+    }
+
+    /* Markdown output */
+    .markdown-output {
+      font-family: monospace; font-size: 13px; line-height: 1.7;
+      white-space: pre-wrap; color: var(--text);
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px;
+      min-height: 200px;
+    }
+
+    /* JSON viewer */
+    .json-output {
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 12px; line-height: 1.6;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px;
+      overflow: auto; white-space: pre-wrap;
+    }
+    .json-key { color: #79c0ff; }
+    .json-str { color: #a5d6ff; }
+    .json-num { color: #ffa657; }
+    .json-bool { color: var(--accent4); }
+    .json-null { color: var(--text2); }
+
+    /* Actions grid */
+    .actions-grid {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .action-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px;
+      transition: border-color 0.15s;
+    }
+    .action-card:hover { border-color: var(--accent); }
+    .action-header {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+    }
+    .action-type-badge {
+      font-size: 10px; font-weight: 700; padding: 2px 7px;
+      border-radius: 12px; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .type-navigate { background: rgba(88,166,255,0.15); color: var(--accent); }
+    .type-click { background: rgba(210,168,255,0.15); color: var(--accent4); }
+    .type-input { background: rgba(63,185,80,0.15); color: var(--accent2); }
+    .type-submit { background: rgba(247,129,102,0.15); color: var(--accent3); }
+    .type-select { background: rgba(255,200,100,0.15); color: #f0b429; }
+    .action-label { font-size: 13px; font-weight: 600; }
+    .action-desc { font-size: 12px; color: var(--text2); }
+    .action-selector {
+      font-family: monospace; font-size: 11px;
+      color: var(--text3); margin-top: 4px;
+      background: var(--bg3); padding: 2px 6px; border-radius: 4px;
+      display: inline-block;
+    }
+
+    /* Toolbar */
+    .output-toolbar {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 10px;
+    }
+    .output-toolbar .label {
+      font-size: 11px; color: var(--text2); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .copy-btn {
+      margin-left: auto;
+      background: var(--bg3); border: 1px solid var(--border);
+      color: var(--text2); font-size: 11px; padding: 4px 10px;
+      border-radius: 6px; cursor: pointer; transition: all 0.15s;
+    }
+    .copy-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+    .copy-btn.copied { color: var(--accent2); border-color: var(--accent2); }
+
+    /* Score bar */
+    .score-bar-wrap { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+    .score-bar {
+      height: 4px; border-radius: 2px; background: var(--bg3); flex: 1;
+    }
+    .score-bar-fill {
+      height: 100%; border-radius: 2px;
+      background: linear-gradient(90deg, var(--accent2), var(--accent));
+      transition: width 0.3s;
+    }
+    .score-val { font-size: 10px; color: var(--text2); font-family: monospace; }
+
+    /* Error */
+    .error-box {
+      background: rgba(247,129,102,0.1); border: 1px solid rgba(247,129,102,0.3);
+      border-radius: var(--radius); padding: 16px; color: var(--accent3);
+      font-size: 13px; display: none;
+    }
+    .error-box.visible { display: block; }
+
+    /* Loading skeleton */
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg3) 25%, var(--bg2) 50%, var(--bg3) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px; height: 14px; margin: 6px 0;
+    }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+    /* Compression chart */
+    .compression-vis {
+      display: flex; align-items: center; gap: 12px; margin: 8px 0;
+    }
+    .bar-group { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+    .bar-label { font-size: 10px; color: var(--text2); }
+    .bar { height: 20px; border-radius: 4px; display: flex; align-items: center; padding: 0 6px; }
+    .bar-orig { background: rgba(247,129,102,0.2); border: 1px solid rgba(247,129,102,0.3); }
+    .bar-dist { background: rgba(63,185,80,0.2); border: 1px solid rgba(63,185,80,0.3); }
+    .bar-text { font-size: 11px; font-family: monospace; color: var(--text); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+    @media (max-width: 900px) {
+      .main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+      .panel-left { max-height: 360px; }
+      .welcome-steps { flex-direction: column; gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-logo">S</div>
+  <div>
+    <div class="header-title">Semantic DOM Distiller</div>
+    <div class="header-sub">DOM-to-Specification Engine for Multimodal AI</div>
+  </div>
+  <div class="header-badge">v0.1.0 &nbsp;·&nbsp; <span id="modeIndicator">heuristic</span> mode</div>
+</header>
+
+<div class="main">
+  <!-- Left Panel -->
+  <div class="panel-left">
+
+    <!-- URL Input -->
+    <div class="panel-section">
+      <div class="panel-label">Target URL</div>
+      <div class="url-input-wrap">
+        <input type="url" class="url-input" id="urlInput"
+          placeholder="https://example.com"
+          value="" />
+        <button class="btn" id="distillBtn" onclick="runDistill()">Distill</button>
+      </div>
+      <div class="examples">
+        <span class="panel-label" style="align-self:center;margin:0">Examples:</span>
+        <button class="example-btn" onclick="setUrl('https://example.com')">example.com</button>
+        <button class="example-btn" onclick="setUrl('https://news.ycombinator.com')">HN</button>
+        <button class="example-btn" onclick="setUrl('https://github.com')">GitHub</button>
+        <button class="example-btn" onclick="setUrl('https://httpbin.org/forms/post')">Form</button>
+      </div>
+    </div>
+
+    <!-- Options -->
+    <div class="panel-section">
+      <div class="panel-label">Options</div>
+      <div class="options-grid">
+        <div class="opt-item">
+          <div class="opt-label">Threshold (pruning)</div>
+          <div class="range-wrap">
+            <input type="range" min="0.1" max="0.9" step="0.05"
+              value="0.3" id="thresholdRange"
+              oninput="document.getElementById('thresholdVal').textContent=this.value" />
+            <span class="range-val" id="thresholdVal">0.3</span>
+          </div>
+        </div>
+        <div class="opt-item">
+          <div class="opt-label">Output format</div>
+          <select class="opt-input" id="outputFormat">
+            <option value="markdown">Markdown</option>
+            <option value="json">JSON</option>
+            <option value="both">Both</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline Steps -->
+    <div class="panel-label" style="padding:12px 16px 4px">Pipeline</div>
+    <div class="pipeline">
+      <div class="step" id="step1">
+        <div class="step-icon">🔍</div>
+        <div class="step-info">
+          <div class="step-name">① Extraction</div>
+          <div class="step-desc">Playwright + DOM cleaning</div>
+        </div>
+        <div class="step-time" id="step1time"></div>
+      </div>
+      <div class="step" id="step2">
+        <div class="step-icon">🧠</div>
+        <div class="step-info">
+          <div class="step-name">② Distillation</div>
+          <div class="step-desc">Importance scoring & pruning</div>
+        </div>
+        <div class="step-time" id="step2time"></div>
+      </div>
+      <div class="step" id="step3">
+        <div class="step-icon">✨</div>
+        <div class="step-info">
+          <div class="step-name">③ Transformation</div>
+          <div class="step-desc">Action-oriented JSON</div>
+        </div>
+        <div class="step-time" id="step3time"></div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="panel-label" style="padding:12px 16px 4px">Results</div>
+    <div class="stats" id="statsArea" style="display:none">
+      <div class="stat-card">
+        <div class="stat-val" id="statNodes">—</div>
+        <div class="stat-label">Original nodes</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="statDistilled">—</div>
+        <div class="stat-label">After distillation</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="statCompression">—</div>
+        <div class="stat-label">Compression</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="statTime">—</div>
+        <div class="stat-label">Process time</div>
+      </div>
+    </div>
+
+    <!-- Compression visualizer -->
+    <div id="compressionVis" style="padding:0 16px 12px;display:none">
+      <div class="bar-group">
+        <div class="bar-label">Original DOM</div>
+        <div class="bar bar-orig" style="width:100%">
+          <span class="bar-text" id="barOrigText"></span>
+        </div>
+        <div class="bar-label" style="margin-top:4px">Distilled</div>
+        <div class="bar bar-dist" id="barDist">
+          <span class="bar-text" id="barDistText"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div class="error-box" id="errorBox"></div>
+
+  </div>
+
+  <!-- Right Panel -->
+  <div class="panel-right">
+    <div class="tabs">
+      <div class="tab active" data-tab="welcome" onclick="switchTab('welcome')">Welcome</div>
+      <div class="tab" data-tab="actions" onclick="switchTab('actions')">Actions</div>
+      <div class="tab" data-tab="markdown" onclick="switchTab('markdown')">Markdown Spec</div>
+      <div class="tab" data-tab="json" onclick="switchTab('json')">JSON Spec</div>
+    </div>
+
+    <!-- Welcome Tab -->
+    <div class="tab-content active" id="tab-welcome">
+      <div class="welcome">
+        <div class="welcome-icon">🧬</div>
+        <h2>Semantic DOM Distiller</h2>
+        <p>
+          複雑なWebページのDOMを解析し、Amazon Nova Act等のマルチモーダルAIが
+          <strong>システム仕様</strong>として理解できる最適化済みJSONとMarkdownに変換します。
+        </p>
+        <div class="welcome-steps">
+          <div class="welcome-step">
+            <div class="welcome-step-num">1</div>
+            <span>URLを入力</span>
+          </div>
+          <div class="welcome-step">
+            <div class="welcome-step-num">2</div>
+            <span>Distill実行</span>
+          </div>
+          <div class="welcome-step">
+            <div class="welcome-step-num">3</div>
+            <span>仕様書を取得</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions Tab -->
+    <div class="tab-content" id="tab-actions">
+      <div class="output-toolbar">
+        <span class="label">Detected Actions</span>
+        <span id="actionCount" style="font-size:11px;color:var(--text2);margin-left:8px"></span>
+      </div>
+      <div class="actions-grid" id="actionsGrid">
+        <div style="color:var(--text2);font-size:13px;text-align:center;padding:40px">
+          Run distillation to see detected actions
+        </div>
+      </div>
+    </div>
+
+    <!-- Markdown Tab -->
+    <div class="tab-content" id="tab-markdown">
+      <div class="output-toolbar">
+        <span class="label">Markdown Specification</span>
+        <button class="copy-btn" id="copyMdBtn" onclick="copyText('markdown')">Copy</button>
+      </div>
+      <pre class="markdown-output" id="markdownOutput">Run distillation to generate Markdown spec...</pre>
+    </div>
+
+    <!-- JSON Tab -->
+    <div class="tab-content" id="tab-json">
+      <div class="output-toolbar">
+        <span class="label">Action-oriented JSON</span>
+        <button class="copy-btn" id="copyJsonBtn" onclick="copyText('json')">Copy</button>
+      </div>
+      <div class="json-output" id="jsonOutput">Run distillation to generate JSON spec...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let currentResult = null;
+  const STEP_TIMES = [4000, 2000, 500]; // 各ステップの概算時間(ms)
+
+  // 起動時にヘルスチェック
+  fetch('/api/health').then(r => r.json()).then(data => {
+    document.getElementById('modeIndicator').textContent = data.mode || 'heuristic';
+  }).catch(() => {});
+
+  function setUrl(url) {
+    document.getElementById('urlInput').value = url;
+  }
+
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelector(`[data-tab="${name}"]`).classList.add('active');
+    document.getElementById(`tab-${name}`).classList.add('active');
+  }
+
+  function setStep(stepId, state) {
+    const el = document.getElementById(stepId);
+    el.classList.remove('active', 'done', 'error');
+    if (state) el.classList.add(state);
+  }
+
+  function setStepTime(stepId, ms) {
+    document.getElementById(stepId + 'time').textContent = ms ? `${ms}ms` : '';
+  }
+
+  async function runDistill() {
+    const url = document.getElementById('urlInput').value.trim();
+    if (!url) { alert('Please enter a URL'); return; }
+
+    const threshold = parseFloat(document.getElementById('thresholdRange').value);
+    const btn = document.getElementById('distillBtn');
+    btn.disabled = true;
+    btn.textContent = 'Processing...';
+
+    // エラー非表示
+    const errorBox = document.getElementById('errorBox');
+    errorBox.classList.remove('visible');
+    document.getElementById('statsArea').style.display = 'none';
+    document.getElementById('compressionVis').style.display = 'none';
+
+    // ステップをリセット
+    setStep('step1', null); setStep('step2', null); setStep('step3', null);
+    setStepTime('step1', null); setStepTime('step2', null); setStepTime('step3', null);
+
+    // ウェルカム画面から切り替え
+    switchTab('markdown');
+    document.getElementById('markdownOutput').textContent = 'Processing...';
+    document.getElementById('jsonOutput').textContent = 'Processing...';
+    document.getElementById('actionsGrid').innerHTML =
+      '<div class="skeleton"></div><div class="skeleton" style="width:70%"></div><div class="skeleton" style="width:85%"></div>';
+
+    // アニメーション: Step 1 開始
+    const t0 = Date.now();
+    setStep('step1', 'active');
+
+    try {
+      const res = await fetch('/api/distill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, options: { threshold } })
+      });
+
+      const t1 = Date.now();
+      setStep('step1', 'done');
+      setStepTime('step1', Math.round((t1 - t0) * 0.6));
+      setStep('step2', 'active');
+
+      await new Promise(r => setTimeout(r, 100));
+      setStep('step2', 'done');
+      setStepTime('step2', Math.round((t1 - t0) * 0.3));
+      setStep('step3', 'active');
+
+      const data = await res.json();
+      const t2 = Date.now();
+      setStep('step3', 'done');
+      setStepTime('step3', Math.round((t2 - t1)));
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Distillation failed');
+      }
+
+      currentResult = data;
+
+      // 統計表示
+      const meta = data.meta;
+      document.getElementById('statNodes').textContent = meta.originalNodes || '—';
+      document.getElementById('statDistilled').textContent = meta.distilledNodes || '—';
+      document.getElementById('statCompression').textContent =
+        meta.compressionRatio != null ? `${meta.compressionRatio}%` : '—';
+      document.getElementById('statTime').textContent =
+        meta.processingTimeMs ? `${meta.processingTimeMs}ms` : '—';
+      document.getElementById('statsArea').style.display = 'grid';
+
+      // 圧縮バー
+      if (meta.originalNodes && meta.distilledNodes) {
+        const ratio = meta.distilledNodes / meta.originalNodes;
+        document.getElementById('barOrigText').textContent = `${meta.originalNodes} nodes`;
+        document.getElementById('barDistText').textContent = `${meta.distilledNodes} nodes`;
+        document.getElementById('barDist').style.width = `${Math.max(ratio * 100, 5)}%`;
+        document.getElementById('compressionVis').style.display = 'block';
+      }
+
+      // モード表示更新
+      document.getElementById('modeIndicator').textContent = meta.mode || 'heuristic';
+
+      // Markdown出力
+      document.getElementById('markdownOutput').textContent = data.markdown || '';
+
+      // JSON出力
+      document.getElementById('jsonOutput').innerHTML = syntaxHighlight(
+        JSON.stringify(data.spec, null, 2)
+      );
+
+      // アクション一覧
+      renderActions(data.spec);
+
+    } catch (err) {
+      setStep('step1', 'error');
+      setStep('step2', 'error');
+      setStep('step3', 'error');
+      errorBox.textContent = `Error: ${err.message}`;
+      errorBox.classList.add('visible');
+      document.getElementById('markdownOutput').textContent = 'Error occurred.';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Distill';
+    }
+  }
+
+  function renderActions(spec) {
+    const grid = document.getElementById('actionsGrid');
+    const actions = spec?.actions || [];
+    document.getElementById('actionCount').textContent =
+      `${actions.length} action(s) detected`;
+
+    if (actions.length === 0) {
+      grid.innerHTML = '<div style="color:var(--text2);text-align:center;padding:40px">No interactive actions detected</div>';
+      return;
+    }
+
+    grid.innerHTML = actions.map(a => `
+      <div class="action-card">
+        <div class="action-header">
+          <span class="action-type-badge type-${a.type || 'click'}">${a.type || 'click'}</span>
+          <span class="action-label">${escHtml(a.label || '')}</span>
+        </div>
+        <div class="action-desc">${escHtml(a.description || '')}</div>
+        <div class="action-selector">${escHtml(a.selector || '')}</div>
+        ${a.href ? `<div style="font-size:11px;color:var(--text2);margin-top:4px">→ ${escHtml(a.href)}</div>` : ''}
+      </div>
+    `).join('');
+
+    switchTab('actions');
+  }
+
+  function syntaxHighlight(json) {
+    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, match => {
+      if (/^"/.test(match)) {
+        if (/:$/.test(match)) return `<span class="json-key">${match}</span>`;
+        return `<span class="json-str">${match}</span>`;
+      } else if (/true|false/.test(match)) return `<span class="json-bool">${match}</span>`;
+      else if (/null/.test(match)) return `<span class="json-null">${match}</span>`;
+      return `<span class="json-num">${match}</span>`;
+    });
+  }
+
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function copyText(type) {
+    if (!currentResult) return;
+    const text = type === 'markdown'
+      ? currentResult.markdown
+      : JSON.stringify(currentResult.spec, null, 2);
+    navigator.clipboard.writeText(text || '').then(() => {
+      const btn = document.getElementById(type === 'markdown' ? 'copyMdBtn' : 'copyJsonBtn');
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+    });
+  }
+
+  // Enter key support
+  document.getElementById('urlInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') runDistill();
+  });
+</script>
+</body>
+</html>

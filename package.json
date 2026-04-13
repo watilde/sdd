@@ -1,0 +1,41 @@
+{
+  "name": "semantic-dom-distiller",
+  "version": "0.1.0",
+  "description": "DOM-to-Specification preprocessing engine optimized for multimodal AI like Amazon Nova Act",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "demo": "node demo/server.js",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "lint": "eslint src/ --ext .js",
+    "train": "python3 scripts/train_model.py",
+    "build:model": "python3 scripts/export_onnx.py"
+  },
+  "keywords": [
+    "dom",
+    "llm",
+    "accessibility",
+    "nova-act",
+    "web-scraping",
+    "ai",
+    "onnx"
+  ],
+  "author": "watilde",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.43.0",
+    "jsdom": "^24.0.0",
+    "onnxruntime-node": "^1.17.3",
+    "express": "^4.19.2",
+    "marked": "^12.0.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "css-select": "^5.1.0",
+    "htmlparser2": "^9.1.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "eslint": "^9.0.0"
+  }
+}

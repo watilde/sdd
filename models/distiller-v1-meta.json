@@ -1,0 +1,98 @@
+{
+  "version": "1.0.0",
+  "feature_keys": [
+    "isHighValueTag",
+    "isMediumValueTag",
+    "isContainerTag",
+    "isInteractive",
+    "isClickable",
+    "hasTabIndex",
+    "hasRole",
+    "roleBaseScore",
+    "hasAriaLabel",
+    "hasAriaLabelledBy",
+    "hasAriaDescribedBy",
+    "hasAriaRequired",
+    "hasAriaExpanded",
+    "hasAriaLive",
+    "hasTestId",
+    "hasText",
+    "textLength",
+    "isLabelText",
+    "isActionText",
+    "childCount",
+    "hasChildren",
+    "isLeaf",
+    "depth",
+    "depthPenalty",
+    "fontSizeNorm",
+    "isBold",
+    "areaRatio",
+    "isAboveFold",
+    "isLargeElement",
+    "hasHref",
+    "hasAlt",
+    "hasPlaceholder",
+    "isRequired",
+    "isDisabled",
+    "inputType",
+    "headingLevel",
+    "parentIsForm",
+    "parentIsNav",
+    "parentIsTable",
+    "parentIsInteractive",
+    "ancestorScore"
+  ],
+  "feature_dim": 41,
+  "model_type": "GradientBoostingRegressor",
+  "n_estimators": 200,
+  "training_samples": 50000,
+  "metrics": {
+    "rmse": 0.034717869182546636,
+    "mae": 0.02690268902210912,
+    "r2": 0.9762431439741864,
+    "threshold_accuracy": 0.9701333333333333
+  },
+  "top_features": [
+    {
+      "name": "parentIsForm",
+      "importance": 0.2961491099187265
+    },
+    {
+      "name": "isInteractive",
+      "importance": 0.16371710330835387
+    },
+    {
+      "name": "isHighValueTag",
+      "importance": 0.11908725354640404
+    },
+    {
+      "name": "depthPenalty",
+      "importance": 0.1007855547538621
+    },
+    {
+      "name": "depth",
+      "importance": 0.09418485816239276
+    },
+    {
+      "name": "roleBaseScore",
+      "importance": 0.08955360554114436
+    },
+    {
+      "name": "isDisabled",
+      "importance": 0.033391569472455924
+    },
+    {
+      "name": "parentIsNav",
+      "importance": 0.021145684124583324
+    },
+    {
+      "name": "hasHref",
+      "importance": 0.019831745870061573
+    },
+    {
+      "name": "isContainerTag",
+      "importance": 0.016910141815356716
+    }
+  ]
+}

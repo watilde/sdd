@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Semantic DOM Distiller — Demo</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧬</text></svg>" />
+
+  <!-- onnxruntime-web (WebAssembly) -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.3/dist/ort.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #0d1117;
+      --bg2: #161b22;
+      --bg3: #1f2937;
+      --border: #30363d;
+      --accent: #58a6ff;
+      --accent2: #3fb950;
+      --accent3: #f78166;
+      --accent4: #d2a8ff;
+      --text: #e6edf3;
+      --text2: #8b949e;
+      --text3: #484f58;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px; line-height: 1.6; min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      padding: 14px 24px; display: flex; align-items: center; gap: 12px;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .header-logo {
+      width: 34px; height: 34px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--accent), var(--accent4));
+      border-radius: 8px; display: flex; align-items: center;
+      justify-content: center; font-size: 17px; font-weight: 800; color: #fff;
+    }
+    .header-title {
+      font-size: 15px; font-weight: 700;
+      background: linear-gradient(90deg, var(--accent), var(--accent4));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .header-sub { font-size: 11px; color: var(--text2); margin-top: 1px; }
+    .header-right {
+      margin-left: auto; display: flex; align-items: center; gap: 10px;
+    }
+    .badge {
+      background: var(--bg3); border: 1px solid var(--border);
+      color: var(--text2); font-size: 11px; padding: 3px 9px;
+      border-radius: 20px; font-family: monospace;
+    }
+    .badge .on { color: var(--accent2); }
+    .badge .off { color: var(--accent3); }
+    .gh-link {
+      color: var(--text2); text-decoration: none; font-size: 12px;
+      border: 1px solid var(--border); padding: 4px 10px; border-radius: 6px;
+      transition: border-color .15s, color .15s;
+    }
+    .gh-link:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Layout ── */
+    .main {
+      display: grid;
+      grid-template-columns: 400px 1fr;
+      height: calc(100vh - 61px);
+    }
+
+    /* ── Left Panel ── */
+    .left {
+      background: var(--bg2); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow-y: auto;
+    }
+    .section { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+    .label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .05em; color: var(--text2); margin-bottom: 8px;
+    }
+
+    textarea {
+      width: 100%; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: var(--radius); color: var(--text); font-size: 12px;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      padding: 10px; resize: vertical; outline: none;
+      transition: border-color .15s; min-height: 160px;
+    }
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: var(--text3); }
+
+    .examples { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+    .ex-btn {
+      background: var(--bg3); border: 1px solid var(--border);
+      color: var(--text2); font-size: 11px; padding: 3px 9px;
+      border-radius: 20px; cursor: pointer; transition: all .15s;
+    }
+    .ex-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .opt-row { display: flex; align-items: center; gap: 10px; }
+    .opt-label { font-size: 11px; color: var(--text2); white-space: nowrap; }
+    input[type=range] { flex: 1; accent-color: var(--accent); }
+    .opt-val { font-family: monospace; font-size: 12px; color: var(--accent); width: 28px; }
+
+    .btn {
+      width: 100%; background: var(--accent); color: #0d1117;
+      border: none; border-radius: var(--radius); font-size: 13px;
+      font-weight: 700; padding: 10px; cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn:active { transform: scale(.98); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+    /* ── Pipeline steps ── */
+    .steps { display: flex; flex-direction: column; gap: 5px; }
+    .step {
+      display: flex; align-items: center; gap: 9px;
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px 11px; transition: all .2s;
+    }
+    .step.active { border-color: var(--accent); background: rgba(88,166,255,.07); }
+    .step.done   { border-color: var(--accent2); background: rgba(63,185,80,.06); }
+    .step.error  { border-color: var(--accent3); background: rgba(247,129,102,.06); }
+    .step-icon { font-size: 14px; width: 22px; text-align: center; flex-shrink: 0; }
+    .step.active .step-icon { animation: blink 1s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .step-name { font-size: 12px; font-weight: 600; }
+    .step-sub  { font-size: 10px; color: var(--text2); }
+    .step-ms   { margin-left: auto; font-size: 10px; color: var(--text3); font-family: monospace; }
+
+    /* ── Stats ── */
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .stat {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 6px; padding: 9px 11px;
+    }
+    .stat-val {
+      font-size: 20px; font-weight: 700;
+      background: linear-gradient(90deg, var(--accent), var(--accent4));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .stat-lbl { font-size: 10px; color: var(--text2); margin-top: 1px; }
+
+    .bar-wrap { margin-top: 4px; }
+    .bar-lbl { font-size: 10px; color: var(--text2); margin-bottom: 2px; }
+    .bar { height: 16px; border-radius: 4px; display: flex; align-items: center; padding: 0 6px; margin-bottom: 4px; }
+    .bar-o { background: rgba(247,129,102,.15); border: 1px solid rgba(247,129,102,.3); width: 100%; }
+    .bar-d { background: rgba(63,185,80,.15); border: 1px solid rgba(63,185,80,.3); transition: width .4s; }
+    .bar span { font-size: 10px; font-family: monospace; color: var(--text); }
+
+    .error-box {
+      background: rgba(247,129,102,.1); border: 1px solid rgba(247,129,102,.3);
+      border-radius: 6px; padding: 10px 12px; color: var(--accent3);
+      font-size: 12px; display: none; margin-top: 6px;
+    }
+    .error-box.show { display: block; }
+
+    /* ── Right Panel ── */
+    .right { display: flex; flex-direction: column; overflow: hidden; }
+
+    .tabs {
+      display: flex; background: var(--bg2);
+      border-bottom: 1px solid var(--border); padding: 0 16px;
+    }
+    .tab {
+      padding: 10px 15px; font-size: 12px; font-weight: 600;
+      color: var(--text2); cursor: pointer;
+      border-bottom: 2px solid transparent; transition: all .15s;
+      user-select: none;
+    }
+    .tab.active { color: var(--accent); border-color: var(--accent); }
+    .tab:hover:not(.active) { color: var(--text); }
+
+    .pane { flex: 1; overflow: auto; padding: 16px; display: none; }
+    .pane.active { display: block; }
+
+    /* ── Welcome ── */
+    .welcome {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100%; text-align: center;
+      color: var(--text2); gap: 12px;
+    }
+    .welcome-icon { font-size: 56px; filter: drop-shadow(0 0 24px rgba(88,166,255,.35)); }
+    .welcome h2 { font-size: 18px; color: var(--text); }
+    .welcome p { font-size: 13px; max-width: 380px; line-height: 1.75; }
+    .how {
+      display: flex; gap: 28px; margin-top: 8px;
+    }
+    .how-step { display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 11px; }
+    .how-num {
+      width: 26px; height: 26px;
+      background: linear-gradient(135deg, var(--accent), var(--accent4));
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-weight: 700; color: #fff; font-size: 12px;
+    }
+
+    /* ── Actions pane ── */
+    .action-list { display: flex; flex-direction: column; gap: 7px; }
+    .action-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 11px 13px;
+      transition: border-color .15s;
+    }
+    .action-card:hover { border-color: var(--accent); }
+    .action-head { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
+    .type-badge {
+      font-size: 10px; font-weight: 700; padding: 2px 7px;
+      border-radius: 11px; text-transform: uppercase; letter-spacing: .05em;
+      flex-shrink: 0;
+    }
+    .t-navigate { background: rgba(88,166,255,.15); color: var(--accent); }
+    .t-click    { background: rgba(210,168,255,.15); color: var(--accent4); }
+    .t-input    { background: rgba(63,185,80,.15);   color: var(--accent2); }
+    .t-submit   { background: rgba(247,129,102,.15); color: var(--accent3); }
+    .t-select   { background: rgba(255,200,100,.15); color: #f0b429; }
+    .t-check    { background: rgba(63,185,80,.12);   color: var(--accent2); }
+    .action-lbl { font-size: 13px; font-weight: 600; }
+    .action-desc { font-size: 12px; color: var(--text2); }
+    .action-sel {
+      margin-top: 4px; font-family: monospace; font-size: 11px;
+      background: var(--bg3); color: var(--text3); display: inline-block;
+      padding: 1px 6px; border-radius: 4px;
+    }
+
+    /* ── Markdown pane ── */
+    .toolbar {
+      display: flex; align-items: center; margin-bottom: 10px; gap: 8px;
+    }
+    .toolbar .tlbl { font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .05em; color: var(--text2); }
+    .copy-btn {
+      margin-left: auto; background: var(--bg3); border: 1px solid var(--border);
+      color: var(--text2); font-size: 11px; padding: 4px 10px; border-radius: 6px;
+      cursor: pointer; transition: all .15s;
+    }
+    .copy-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+    .copy-btn.done  { border-color: var(--accent2); color: var(--accent2); }
+
+    pre.md-out {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px; font-family: monospace;
+      font-size: 12px; line-height: 1.7; white-space: pre-wrap;
+      color: var(--text); min-height: 120px;
+    }
+
+    /* ── JSON pane ── */
+    .json-out {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px; font-family: monospace;
+      font-size: 12px; line-height: 1.6; white-space: pre-wrap;
+    }
+    .jk { color: #79c0ff; }
+    .js { color: #a5d6ff; }
+    .jn { color: #ffa657; }
+    .jb { color: var(--accent4); }
+    .jl { color: var(--text2); }
+
+    /* ── scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    @media (max-width: 860px) {
+      .main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+      .left { max-height: 55vh; }
+      .how { flex-direction: column; gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="header">
+  <div class="header-logo">S</div>
+  <div>
+    <div class="header-title">Semantic DOM Distiller</div>
+    <div class="header-sub">DOM-to-Specification Engine · Runs fully in your browser</div>
+  </div>
+  <div class="header-right">
+    <span class="badge">ONNX: <span id="onnxStatus" class="off">loading…</span></span>
+    <a class="gh-link" href="https://github.com/watilde/sdd" target="_blank">GitHub ↗</a>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- ══════════════ Left Panel ══════════════ -->
+  <div class="left">
+
+    <!-- HTML input -->
+    <div class="section">
+      <div class="label">HTML を貼り付け</div>
+      <textarea id="htmlInput" rows="9"
+        placeholder="<html>...</html> をここに貼り付けてください&#10;&#10;右の Examples ボタンでサンプルを試せます"></textarea>
+      <div class="examples">
+        <span style="font-size:11px;color:var(--text2);align-self:center">Examples:</span>
+        <button class="ex-btn" onclick="loadExample('login')">Login Form</button>
+        <button class="ex-btn" onclick="loadExample('dashboard')">Dashboard</button>
+        <button class="ex-btn" onclick="loadExample('ecommerce')">E-Commerce</button>
+        <button class="ex-btn" onclick="loadExample('nav')">Navigation</button>
+      </div>
+    </div>
+
+    <!-- Options -->
+    <div class="section">
+      <div class="label">Options</div>
+      <div class="opt-row">
+        <span class="opt-label">Threshold (枝刈り)</span>
+        <input type="range" id="thresh" min="0.1" max="0.9" step="0.05" value="0.3"
+          oninput="document.getElementById('threshVal').textContent=this.value">
+        <span class="opt-val" id="threshVal">0.3</span>
+      </div>
+    </div>
+
+    <!-- Run button -->
+    <div class="section">
+      <button class="btn" id="runBtn" onclick="runDistill()" disabled>
+        モデルを読み込み中…
+      </button>
+      <div class="error-box" id="errBox"></div>
+    </div>
+
+    <!-- Pipeline -->
+    <div class="section">
+      <div class="label">Pipeline</div>
+      <div class="steps">
+        <div class="step" id="s1">
+          <div class="step-icon">🔍</div>
+          <div><div class="step-name">① Extraction</div><div class="step-sub">DOMParser + visibility filter</div></div>
+          <div class="step-ms" id="s1ms"></div>
+        </div>
+        <div class="step" id="s2">
+          <div class="step-icon">🧠</div>
+          <div><div class="step-name">② Distillation</div><div class="step-sub">ONNX WebAssembly scoring</div></div>
+          <div class="step-ms" id="s2ms"></div>
+        </div>
+        <div class="step" id="s3">
+          <div class="step-icon">✨</div>
+          <div><div class="step-name">③ Transformation</div><div class="step-sub">Action-oriented JSON</div></div>
+          <div class="step-ms" id="s3ms"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="section" id="statsSection" style="display:none">
+      <div class="label">Results</div>
+      <div class="stats">
+        <div class="stat"><div class="stat-val" id="stOrig">—</div><div class="stat-lbl">Original nodes</div></div>
+        <div class="stat"><div class="stat-val" id="stDist">—</div><div class="stat-lbl">Distilled nodes</div></div>
+        <div class="stat"><div class="stat-val" id="stComp">—</div><div class="stat-lbl">Compression</div></div>
+        <div class="stat"><div class="stat-val" id="stTime">—</div><div class="stat-lbl">Process time</div></div>
+      </div>
+      <div class="bar-wrap" id="barWrap" style="margin-top:10px">
+        <div class="bar-lbl">Original DOM</div>
+        <div class="bar bar-o"><span id="barOTxt"></span></div>
+        <div class="bar-lbl">Distilled</div>
+        <div class="bar bar-d" id="barD"><span id="barDTxt"></span></div>
+      </div>
+    </div>
+
+  </div><!-- /left -->
+
+  <!-- ══════════════ Right Panel ══════════════ -->
+  <div class="right">
+    <div class="tabs">
+      <div class="tab active" data-tab="welcome"  onclick="switchTab('welcome')">Welcome</div>
+      <div class="tab"        data-tab="actions"  onclick="switchTab('actions')">Actions</div>
+      <div class="tab"        data-tab="markdown" onclick="switchTab('markdown')">Markdown Spec</div>
+      <div class="tab"        data-tab="json"     onclick="switchTab('json')">JSON</div>
+    </div>
+
+    <!-- Welcome -->
+    <div class="pane active" id="pane-welcome">
+      <div class="welcome">
+        <div class="welcome-icon">🧬</div>
+        <h2>Semantic DOM Distiller</h2>
+        <p>複雑なHTMLを解析し、Amazon Nova Act 等のマルチモーダルAIが<strong>システム仕様</strong>として理解できる最適化済みJSON / Markdown に変換します。<br><br>推論は <strong>ONNX WebAssembly</strong> でブラウザ内完結。サーバー不要。</p>
+        <div class="how">
+          <div class="how-step"><div class="how-num">1</div><span>HTMLを貼り付け</span></div>
+          <div class="how-step"><div class="how-num">2</div><span>Distill 実行</span></div>
+          <div class="how-step"><div class="how-num">3</div><span>仕様書を取得</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="pane" id="pane-actions">
+      <div class="toolbar">
+        <span class="tlbl">Detected Actions</span>
+        <span id="actionCnt" style="font-size:11px;color:var(--text2);margin-left:8px"></span>
+      </div>
+      <div class="action-list" id="actionList">
+        <div style="color:var(--text2);text-align:center;padding:40px;font-size:13px">
+          Distill を実行すると検出されたアクションが表示されます
+        </div>
+      </div>
+    </div>
+
+    <!-- Markdown -->
+    <div class="pane" id="pane-markdown">
+      <div class="toolbar">
+        <span class="tlbl">Markdown Specification</span>
+        <button class="copy-btn" id="cpMd" onclick="copyOut('md')">Copy</button>
+      </div>
+      <pre class="md-out" id="mdOut">Distill を実行すると Markdown 仕様書が生成されます…</pre>
+    </div>
+
+    <!-- JSON -->
+    <div class="pane" id="pane-json">
+      <div class="toolbar">
+        <span class="tlbl">Action-oriented JSON</span>
+        <button class="copy-btn" id="cpJson" onclick="copyOut('json')">Copy</button>
+      </div>
+      <div class="json-out" id="jsonOut">Distill を実行すると JSON が生成されます…</div>
+    </div>
+  </div><!-- /right -->
+
+</div><!-- /main -->
+
+<!-- ══════════════════════════════════════════
+     SDD ブラウザ実装
+     Node.js版の3レイヤーをそのままブラウザJSに移植
+══════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ================================================================
+// 定数・設定
+// ================================================================
+
+const REMOVE_TAGS = new Set([
+  'script','style','noscript','svg','canvas','iframe',
+  'object','embed','link','meta','head','template','slot'
+]);
+
+const IMPLICIT_ROLES = {
+  a:'link', article:'article', aside:'complementary', button:'button',
+  details:'group', dialog:'dialog', figure:'figure', footer:'contentinfo',
+  form:'form', h1:'heading', h2:'heading', h3:'heading',
+  h4:'heading', h5:'heading', h6:'heading', header:'banner',
+  img:'img', input:'textbox', li:'listitem', main:'main',
+  nav:'navigation', ol:'list', option:'option', p:'paragraph',
+  section:'region', select:'listbox', summary:'button', table:'table',
+  tbody:'rowgroup', td:'cell', textarea:'textbox', th:'columnheader',
+  tr:'row', ul:'list',
+};
+
+const INTERACTIVE_TAGS = new Set([
+  'a','button','input','select','textarea','details','summary','label'
+]);
+
+const HIGH_VALUE_TAGS = new Set([
+  'button','input','select','textarea','a','form','nav','main',
+  'h1','h2','h3','table'
+]);
+const MEDIUM_VALUE_TAGS = new Set([
+  'h4','h5','h6','label','fieldset','legend','article','section',
+  'header','footer','aside','ul','ol','li','details','summary','dialog'
+]);
+
+const ROLE_BASE_SCORES = {
+  button:.85, link:.80, textbox:.85, listbox:.80, combobox:.85,
+  checkbox:.80, radio:.80, switch:.80, tab:.75, menuitem:.75,
+  heading:.70, navigation:.70, main:.65, form:.70, table:.65,
+  row:.50, cell:.45, columnheader:.60, list:.45, listitem:.40,
+  img:.50, banner:.55, contentinfo:.45, complementary:.40,
+  region:.40, article:.50, paragraph:.40, group:.35, dialog:.80,
+};
+
+const ACTION_WORDS = [
+  'submit','send','save','cancel','delete','edit','update','create',
+  'add','remove','search','login','logout','register','sign in','sign up',
+  'sign out','confirm','approve','reject','download','upload','export',
+  'import','continue','next','previous','back','close','open','toggle',
+  '送信','保存','キャンセル','削除','編集','検索','ログイン',
+  '登録','確認','次へ','戻る','閉じる','開く',
+];
+
+const INPUT_TYPE_SCORES = {
+  submit:1.0, button:.9, search:.85, email:.80, password:.80,
+  tel:.75, text:.70, number:.70, url:.70, date:.70, time:.65,
+  file:.75, checkbox:.80, radio:.80, range:.60, color:.50, hidden:.0,
+};
+
+// ================================================================
+// ONNX セッション（グローバル）
+// ================================================================
+let onnxSession = null;
+
+const FEATURE_KEYS = [
+  'isHighValueTag','isMediumValueTag','isContainerTag',
+  'isInteractive','isClickable','hasTabIndex',
+  'hasRole','roleBaseScore',
+  'hasAriaLabel','hasAriaLabelledBy','hasAriaDescribedBy',
+  'hasAriaRequired','hasAriaExpanded','hasAriaLive','hasTestId',
+  'hasText','textLength','isLabelText','isActionText',
+  'childCount','hasChildren','isLeaf',
+  'depth','depthPenalty',
+  'fontSizeNorm','isBold','areaRatio','isAboveFold','isLargeElement',
+  'hasHref','hasAlt','hasPlaceholder','isRequired','isDisabled',
+  'inputType','headingLevel',
+  'parentIsForm','parentIsNav','parentIsTable',
+  'parentIsInteractive','ancestorScore'
+];
+
+async function initOnnx() {
+  try {
+    // WASMファイルはすべてCDNから取得（ローカル404を防ぐ）
+    ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.3/dist/';
+    // マルチスレッドはcrossOriginIsolated必須のため無効化（GitHub Pages対応）
+    ort.env.wasm.numThreads = 1;
+    // distiller-v1.onnx は同ディレクトリに配置
+    onnxSession = await ort.InferenceSession.create('./distiller-v1.onnx',
+      { executionProviders: ['wasm'] });
+    document.getElementById('onnxStatus').textContent = 'ON';
+    document.getElementById('onnxStatus').className = 'on';
+    document.getElementById('runBtn').disabled = false;
+    document.getElementById('runBtn').textContent = 'Distill ▶';
+    console.log('[SDD] ONNX model loaded (WebAssembly)');
+  } catch (e) {
+    console.warn('[SDD] ONNX load failed, heuristic mode:', e.message);
+    document.getElementById('onnxStatus').textContent = 'heuristic';
+    document.getElementById('onnxStatus').className = 'off';
+    document.getElementById('runBtn').disabled = false;
+    document.getElementById('runBtn').textContent = 'Distill ▶';
+  }
+}
+
+// ================================================================
+// ① Extraction Layer（ブラウザ版）
+// DOMParser で解析 → 不要タグ除去 → ノードツリー構築
+// ================================================================
+
+function extractFromHTML(html, baseUrl = 'about:blank') {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const title = doc.title || '';
+  const lang  = doc.documentElement.getAttribute('lang') || 'en';
+  const desc  = doc.querySelector('meta[name="description"]')?.content || '';
+  const body  = doc.body || doc.documentElement;
+
+  const tree  = processNode(body, new Map(), 0);
+  const stats = computeStats(tree);
+  return { title, lang, description: desc, tree, stats,
+           url: baseUrl, capturedAt: new Date().toISOString() };
+}
+
+function processNode(el, elMap, depth) {
+  if (!el || depth > 50) return null;
+  if (el.nodeType !== 1) return null;
+  const tag = el.tagName.toLowerCase();
+  if (REMOVE_TAGS.has(tag)) return null;
+
+  // 非表示判定（静的解析のみ）
+  if (el.hasAttribute('hidden')) return null;
+  if (el.getAttribute('aria-hidden') === 'true') return null;
+
+  const directText = extractDirectText(el);
+  const children = [];
+  for (const child of el.children) {
+    const c = processNode(child, elMap, depth + 1);
+    if (c) children.push(c);
+  }
+
+  const role = el.getAttribute('role') || IMPLICIT_ROLES[tag] || null;
+  const isInteractive = isInteractiveEl(el, tag, role);
+
+  if (!isInteractive && children.length === 0 && !directText) return null;
+
+  const attrs = extractSemanticAttrs(el, tag);
+  const node = {
+    tag, role,
+    id: el.getAttribute('id') || null,
+    text: directText,
+    attrs: Object.keys(attrs).length ? attrs : undefined,
+    isInteractive,
+    isClickable: isInteractive || el.hasAttribute('onclick'),
+    depth,
+    children: children.length ? children : undefined
+  };
+  return compact(node);
+}
+
+function extractDirectText(el) {
+  let t = '';
+  for (const n of el.childNodes) {
+    if (n.nodeType === 3) t += n.textContent;
+  }
+  return t.trim().replace(/\s+/g, ' ') || null;
+}
+
+function isInteractiveEl(el, tag, role) {
+  if (INTERACTIVE_TAGS.has(tag)) return true;
+  if (el.hasAttribute('onclick') || el.hasAttribute('onchange')) return true;
+  if (el.tabIndex >= 0 && tag !== 'div' && tag !== 'span') return true;
+  if (role && ['button','link','menuitem','tab','option',
+    'checkbox','radio','switch','combobox'].includes(role)) return true;
+  if (el.getAttribute('contenteditable') === 'true') return true;
+  return false;
+}
+
+function extractSemanticAttrs(el, tag) {
+  const keep = [
+    'href','src','alt','title','placeholder','type','name','value',
+    'for','action','method',
+    'aria-label','aria-labelledby','aria-describedby','aria-required',
+    'aria-expanded','aria-selected','aria-checked','aria-controls',
+    'aria-live','aria-invalid','aria-haspopup',
+    'disabled','required','readonly','checked','selected','multiple',
+    'data-testid','data-cy','data-test'
+  ];
+  const a = {};
+  for (const k of keep) {
+    const v = el.getAttribute(k);
+    if (v !== null && v !== '') a[k] = v;
+  }
+  if (/^h[1-6]$/.test(tag)) a.level = parseInt(tag[1]);
+  return a;
+}
+
+function compact(o) {
+  const r = {};
+  for (const [k,v] of Object.entries(o)) {
+    if (v !== null && v !== undefined) r[k] = v;
+  }
+  return r;
+}
+
+function computeStats(node) {
+  let total = 0, interactive = 0, maxD = 0;
+  const walk = (n, d) => {
+    if (!n) return;
+    total++; if (n.isInteractive) interactive++;
+    maxD = Math.max(maxD, d);
+    n.children?.forEach(c => walk(c, d+1));
+  };
+  walk(node, 0);
+  return { totalNodes: total, interactiveNodes: interactive, maxDepth: maxD };
+}
+
+// ================================================================
+// ② Distillation Layer（ブラウザ版）
+// ONNX WebAssembly 推論 or ヒューリスティック
+// ================================================================
+
+function extractFeatures(node, parentCtx = {}) {
+  const f = {};
+  const attrs = node.attrs || {};
+  const text  = node.text || '';
+
+  f.isHighValueTag   = HIGH_VALUE_TAGS.has(node.tag)   ? 1 : 0;
+  f.isMediumValueTag = MEDIUM_VALUE_TAGS.has(node.tag) ? 1 : 0;
+  f.isContainerTag   = ['div','span','p','section','article',
+                         'main','aside','header','footer'].includes(node.tag) ? 1 : 0;
+
+  f.isInteractive = node.isInteractive ? 1 : 0;
+  f.isClickable   = node.isClickable   ? 1 : 0;
+  f.hasTabIndex   = (attrs.tabIndex >= 0) ? 1 : 0;
+
+  f.hasRole           = node.role ? 1 : 0;
+  f.roleBaseScore     = ROLE_BASE_SCORES[node.role] || 0;
+  f.hasAriaLabel      = attrs['aria-label']       ? 1 : 0;
+  f.hasAriaLabelledBy = attrs['aria-labelledby']  ? 1 : 0;
+  f.hasAriaDescribedBy= attrs['aria-describedby'] ? 1 : 0;
+  f.hasAriaRequired   = attrs['aria-required'] === 'true' ? 1 : 0;
+  f.hasAriaExpanded   = attrs['aria-expanded'] !== undefined ? 1 : 0;
+  f.hasAriaLive       = attrs['aria-live'] ? 1 : 0;
+  f.hasTestId = (attrs['data-testid'] || attrs['data-cy'] || attrs['data-test']) ? 1 : 0;
+
+  f.hasText      = text.length > 0 ? 1 : 0;
+  f.textLength   = Math.min(text.length / 200, 1);
+  f.isLabelText  = (text.length > 0 && text.length < 50 && !text.includes('\n')) ? 1 : 0;
+  f.isActionText = text.length > 0 && ACTION_WORDS.some(w => text.toLowerCase().includes(w)) ? 1 : 0;
+
+  const cc = node.children?.length || 0;
+  f.childCount  = Math.min(cc / 10, 1);
+  f.hasChildren = cc > 0 ? 1 : 0;
+  f.isLeaf      = cc === 0 ? 1 : 0;
+  const depth   = node.depth || 0;
+  f.depth       = Math.min(depth / 20, 1);
+  f.depthPenalty = depth <= 3 ? 1.0 : depth <= 6 ? 0.85 : depth <= 10 ? 0.65 : depth <= 15 ? 0.45 : 0.25;
+
+  // 視覚情報はブラウザ外解析のため推定値
+  f.fontSizeNorm   = 0.5;
+  f.isBold         = 0;
+  f.areaRatio      = 0;
+  f.isAboveFold    = 0.5;
+  f.isLargeElement = 0;
+
+  f.hasHref        = attrs.href      ? 1 : 0;
+  f.hasAlt         = attrs.alt       ? 1 : 0;
+  f.hasPlaceholder = attrs.placeholder ? 1 : 0;
+  f.isRequired     = attrs.required !== undefined ? 1 : 0;
+  f.isDisabled     = attrs.disabled  !== undefined ? 1 : 0;
+  f.inputType      = INPUT_TYPE_SCORES[attrs.type] ?? 0.5;
+  f.headingLevel   = attrs.level ? (7 - attrs.level) / 6 : 0;
+
+  f.parentIsForm        = parentCtx.isForm        ? 1 : 0;
+  f.parentIsNav         = parentCtx.isNav         ? 1 : 0;
+  f.parentIsTable       = parentCtx.isTable       ? 1 : 0;
+  f.parentIsInteractive = parentCtx.isInteractive ? 1 : 0;
+  f.ancestorScore       = Math.min(parentCtx.ancestorScore || 0, 1);
+
+  return f;
+}
+
+function toFloat32Array(features) {
+  const arr = new Float32Array(FEATURE_KEYS.length);
+  FEATURE_KEYS.forEach((k, i) => { arr[i] = features[k] ?? 0; });
+  return arr;
+}
+
+function heuristicScore(f) {
+  let s = 0;
+  s += f.roleBaseScore   * .30;
+  s += f.isHighValueTag  * .20;
+  s += f.isMediumValueTag* .08;
+  s += f.isInteractive   * .18;
+  s += f.isClickable     * .05;
+  s += f.hasAriaLabel    * .06;
+  s += f.hasAriaRequired * .04;
+  s += f.hasTestId       * .03;
+  s += f.hasAriaLive     * .05;
+  s += f.isActionText    * .12;
+  s += f.isLabelText     * .04;
+  s += f.hasText         * .03;
+  s += f.fontSizeNorm    * .06;
+  s += f.isBold          * .03;
+  s += f.isAboveFold     * .04;
+  s += f.isLargeElement  * .02;
+  s += f.hasHref         * .05;
+  s += f.hasPlaceholder  * .04;
+  s += f.isRequired      * .05;
+  s += f.headingLevel    * .06;
+  s += f.inputType       * .04;
+  s += f.parentIsForm    * .08;
+  s += f.parentIsNav     * .05;
+  s += f.ancestorScore   * .03;
+  s *= f.depthPenalty;
+  if (f.isDisabled) s *= .3;
+  if (f.isContainerTag && !f.hasChildren && !f.hasText) s *= .1;
+  if (f.parentIsForm && f.isInteractive) s = Math.max(s, .7);
+  if (f.parentIsNav  && f.hasHref)       s = Math.max(s, .65);
+  return Math.max(0, Math.min(1, s));
+}
+
+async function scoreNode(node, parentCtx, threshold) {
+  if (!node) return null;
+  const features = extractFeatures(node, parentCtx);
+  let score;
+
+  if (onnxSession) {
+    try {
+      const arr    = toFloat32Array(features);
+      const tensor = new ort.Tensor('float32', arr, [1, arr.length]);
+      const res    = await onnxSession.run({ input: tensor });
+      const out    = res.output?.data || res[Object.keys(res)[0]]?.data;
+      score = Math.max(0, Math.min(1, out[0]));
+    } catch(e) {
+      score = heuristicScore(features);
+    }
+  } else {
+    score = heuristicScore(features);
+  }
+
+  const childCtx = {
+    isForm:        node.tag === 'form' || parentCtx.isForm,
+    isNav:         node.tag === 'nav'  || node.role === 'navigation' || parentCtx.isNav,
+    isTable:       node.tag === 'table'|| parentCtx.isTable,
+    isInteractive: node.isInteractive  || parentCtx.isInteractive,
+    ancestorScore: Math.max(score, parentCtx.ancestorScore || 0) * .7
+  };
+
+  let children;
+  if (node.children?.length) {
+    const scored = await Promise.all(node.children.map(c => scoreNode(c, childCtx, threshold)));
+    children = scored.filter(Boolean);
+  }
+
+  return { ...node, score: Math.round(score * 1000) / 1000,
+           children: children?.length ? children : undefined };
+}
+
+function prune(node, threshold) {
+  if (!node) return null;
+  const pc = node.children?.map(c => prune(c, threshold)).filter(Boolean);
+  const hasImportantChild = pc?.some(c => c.score >= threshold);
+  if (node.score < threshold && !hasImportantChild) return null;
+  return { ...node, children: pc?.length ? pc : undefined };
+}
+
+// ================================================================
+// ③ Transformation Layer（ブラウザ版）
+// ================================================================
+
+function transform(tree, pageInfo = {}) {
+  const elements = [];
+  collectElements(tree, elements, null);
+
+  const actions    = extractActions(elements);
+  const forms      = extractForms(elements);
+  const navigation = extractNavigation(elements);
+  const content    = extractContent(elements);
+  const summary    = generateSummary(elements, pageInfo);
+
+  return {
+    $schema: 'https://github.com/watilde/sdd/schemas/action-spec-v1.json',
+    page: {
+      title: pageInfo.title || '',
+      url:   pageInfo.url   || '',
+      description: pageInfo.description || '',
+      lang:  pageInfo.lang  || 'en',
+      capturedAt: pageInfo.capturedAt || new Date().toISOString()
+    },
+    summary, actions, forms, navigation, content,
+    interactive: elements.filter(e => e.isInteractive).map(e => ({
+      type: actionType(e), label: e.label || e.text,
+      selector: e.selector, role: e.role,
+      required: e.required, disabled: e.disabled
+    }))
+  };
+}
+
+function collectElements(node, out, section) {
+  if (!node) return;
+  const el = nodeToElement(node, section);
+  if (el) out.push(el);
+  const sec = sectionLabel(node) || section;
+  node.children?.forEach(c => collectElements(c, out, sec));
+}
+
+function nodeToElement(node, section) {
+  const attrs = node.attrs || {};
+  const label = genLabel(node);
+  const text  = node.text || '';
+  if (!label && !text && !node.isInteractive) return null;
+  return {
+    tag: node.tag, role: node.role, label, text: text || null,
+    selector: genSelector(node),
+    isInteractive: node.isInteractive || false,
+    isClickable:   node.isClickable   || false,
+    type:      attrs.type     || null,
+    href:      attrs.href     || null,
+    placeholder: attrs.placeholder || null,
+    required:  attrs.required !== undefined,
+    disabled:  attrs.disabled !== undefined,
+    ariaLabel: attrs['aria-label'] || null,
+    ariaRequired: attrs['aria-required'] === 'true',
+    ariaExpanded: attrs['aria-expanded'] !== undefined
+      ? attrs['aria-expanded'] === 'true' : null,
+    section,
+    score: node.score || 0,
+    headingLevel: attrs.level || null,
+    formAction: attrs.action || null,
+    formMethod: attrs.method || null,
+  };
+}
+
+function genSelector(node) {
+  const attrs = node.attrs || {};
+  if (attrs['aria-label'])  return `[aria-label="${attrs['aria-label']}"]`;
+  if (attrs['data-testid']) return `[data-testid="${attrs['data-testid']}"]`;
+  if (node.id)              return `#${node.id}`;
+  if (node.role && node.text) return `${node.role}:contains("${node.text.slice(0,30)}")`;
+  if (node.tag === 'input' && attrs.type) {
+    return attrs.placeholder
+      ? `input[type="${attrs.type}"][placeholder="${attrs.placeholder}"]`
+      : `input[type="${attrs.type}"]`;
+  }
+  if (node.text) return `${node.tag}:contains("${node.text.slice(0,30)}")`;
+  if (node.role) return `[role="${node.role}"]`;
+  return node.tag;
+}
+
+function genLabel(node) {
+  const attrs = node.attrs || {};
+  if (attrs['aria-label']) return attrs['aria-label'];
+  if (attrs.alt)           return attrs.alt;
+  if (node.text?.trim())   return node.text.trim();
+  if (attrs.placeholder)   return `Input: ${attrs.placeholder}`;
+  if (node.role === 'button' && attrs.type === 'submit') return 'Submit Button';
+  if (attrs.href) {
+    const parts = attrs.href.split('/').filter(Boolean);
+    return parts.length ? `Link to ${parts[parts.length-1]}` : 'Home Link';
+  }
+  return null;
+}
+
+function sectionLabel(node) {
+  const m = { navigation:'Navigation', main:'Main Content', form:'Form',
+              banner:'Header', contentinfo:'Footer', complementary:'Sidebar',
+              dialog:'Dialog', region:'Region', search:'Search' };
+  if (node.role && m[node.role]) return m[node.role];
+  const t = { nav:'Navigation', form:'Form', main:'Main Content',
+              header:'Header', footer:'Footer', aside:'Sidebar' };
+  return t[node.tag] || null;
+}
+
+function actionType(el) {
+  if (el.role === 'link' || el.tag === 'a') return 'navigate';
+  if ((el.role === 'button' || el.tag === 'button') && el.type === 'submit') return 'submit';
+  if (el.role === 'button' || el.tag === 'button') return 'click';
+  if (['textbox','input','textarea'].includes(el.role) ||
+      ['input','textarea'].includes(el.tag)) return 'input';
+  if (el.role === 'listbox' || el.tag === 'select') return 'select';
+  if (el.role === 'checkbox') return 'check';
+  if (el.role === 'radio')    return 'radio';
+  return 'interact';
+}
+
+function actionDesc(el) {
+  const lbl = el.label || el.text || '';
+  const ctx = el.section ? ` in ${el.section}` : '';
+  const t = actionType(el);
+  const tmpl = {
+    navigate: `Navigate to ${lbl}${ctx}`,
+    submit:   `Submit${ctx} form`,
+    click:    `Click "${lbl}"${ctx}`,
+    input:    `Enter text into ${lbl}${el.placeholder ? ` (${el.placeholder})` : ''}`,
+    select:   `Select an option from ${lbl}`,
+    check:    `Toggle checkbox: ${lbl}`,
+    radio:    `Select radio option: ${lbl}`,
+    interact: `Interact with ${lbl}${ctx}`
+  };
+  return tmpl[t] || `${t}: ${lbl}`;
+}
+
+function extractActions(elements) {
+  return elements
+    .filter(e => e.isInteractive || e.isClickable)
+    .filter(e => e.score >= 0.4)
+    .sort((a,b) => b.score - a.score)
+    .map(e => ({
+      type: actionType(e),
+      label: e.label || e.text || 'Unknown',
+      selector: e.selector,
+      description: actionDesc(e),
+      context: e.section,
+      href: e.href,
+    }));
+}
+
+function extractForms(elements) {
+  const forms = [];
+  for (const el of elements) {
+    if (el.tag !== 'form') continue;
+    const fields = elements.filter(f =>
+      f.section === 'Form' && ['input','select','textarea'].includes(f.tag) && f !== el
+    );
+    forms.push({
+      label: el.ariaLabel || 'Form',
+      selector: el.selector,
+      action: el.formAction,
+      method: el.formMethod || 'get',
+      fields: fields.map(f => ({
+        name: f.ariaLabel || f.label || f.placeholder,
+        label: f.label || f.placeholder || f.type || 'Field',
+        type: f.type || f.tag,
+        placeholder: f.placeholder,
+        required: f.required || f.ariaRequired,
+        selector: f.selector
+      }))
+    });
+  }
+  if (forms.length === 0) {
+    const fields = elements.filter(e =>
+      ['input','select','textarea'].includes(e.tag) && e.type !== 'hidden'
+    );
+    if (fields.length) {
+      forms.push({
+        label: 'Form (implicit)', selector: 'form',
+        fields: fields.map(f => ({
+          name: f.ariaLabel || f.label || f.placeholder,
+          label: f.label || f.placeholder || f.type || 'Field',
+          type: f.type || f.tag, placeholder: f.placeholder,
+          required: f.required || f.ariaRequired, selector: f.selector
+        }))
+      });
+    }
+  }
+  return forms;
+}
+
+function extractNavigation(elements) {
+  const links = elements.filter(e =>
+    e.section === 'Navigation' && (e.role === 'link' || e.tag === 'a') && e.label
+  );
+  if (!links.length) return [];
+  return [{ label: 'Main Navigation',
+            links: links.map(l => ({ label: l.label, href: l.href, selector: l.selector })) }];
+}
+
+function extractContent(elements) {
+  return elements
+    .filter(e => e.headingLevel && e.text)
+    .sort((a,b) => a.headingLevel - b.headingLevel)
+    .map(e => ({ level: e.headingLevel, text: e.text, selector: e.selector }));
+}
+
+function generateSummary(elements, pageInfo) {
+  const ic  = elements.filter(e => e.isInteractive).length;
+  const fc  = elements.filter(e => e.tag === 'form').length;
+  const nc  = elements.filter(e => e.section === 'Navigation' && e.role === 'link').length;
+  const pac = elements.filter(e => e.isInteractive && e.score >= .7).length;
+  const h1s = elements.filter(e => e.headingLevel === 1 && e.text).map(e => e.text);
+  const d   = h1s.length
+    ? `Page "${pageInfo.title}" with heading "${h1s[0]}". `
+    : `Page "${pageInfo.title}". `;
+  const parts = [];
+  if (ic) parts.push(`${ic} interactive elements`);
+  if (fc) parts.push(`${fc} form(s)`);
+  if (nc) parts.push(`${nc} navigation links`);
+  return {
+    description: d + (parts.length ? `Contains ${parts.join(', ')}.` : 'Mostly static content.'),
+    interactiveCount: ic, formCount: fc, navLinkCount: nc, primaryActionCount: pac
+  };
+}
+
+// ── Markdown 生成 ──────────────────────────────────────────
+function toMarkdown(spec) {
+  const L = [];
+  L.push(`# Page Specification: ${spec.page.title}`);
+  L.push('');
+  L.push(`**URL**: \`${spec.page.url}\``);
+  if (spec.page.description) L.push(`**Description**: ${spec.page.description}`);
+  L.push(`**Captured**: ${spec.page.capturedAt}`);
+  L.push('');
+  L.push('## Summary');
+  L.push('');
+  L.push(spec.summary.description);
+  L.push('');
+  L.push(`- **Interactive elements**: ${spec.summary.interactiveCount}`);
+  L.push(`- **Forms**: ${spec.summary.formCount}`);
+  L.push(`- **Navigation links**: ${spec.summary.navLinkCount}`);
+  L.push(`- **Primary actions**: ${spec.summary.primaryActionCount}`);
+  L.push('');
+
+  if (spec.actions?.length) {
+    L.push('## Available Actions');
+    L.push('');
+    spec.actions.forEach((a,i) => {
+      L.push(`### ${i+1}. ${a.label}`);
+      L.push(`- **Type**: ${a.type}`);
+      L.push(`- **Selector**: \`${a.selector}\``);
+      if (a.description) L.push(`- **Description**: ${a.description}`);
+      if (a.context)     L.push(`- **Context**: ${a.context}`);
+      if (a.href)        L.push(`- **href**: ${a.href}`);
+      L.push('');
+    });
+  }
+
+  if (spec.forms?.length) {
+    L.push('## Forms');
+    L.push('');
+    spec.forms.forEach((f,i) => {
+      L.push(`### Form ${i+1}: ${f.label}`);
+      if (f.action) L.push(`- **Action**: ${f.action}`);
+      if (f.method) L.push(`- **Method**: ${f.method.toUpperCase()}`);
+      if (f.fields?.length) {
+        L.push('- **Fields**:');
+        f.fields.forEach(fd => {
+          const req = fd.required ? ' *(required)*' : '';
+          L.push(`  - \`${fd.name || fd.label}\` [${fd.type}]${req}: ${fd.label}`);
+          if (fd.placeholder) L.push(`    - Placeholder: "${fd.placeholder}"`);
+        });
+      }
+      L.push('');
+    });
+  }
+
+  if (spec.navigation?.length) {
+    L.push('## Navigation');
+    L.push('');
+    spec.navigation.forEach(nav => {
+      L.push(`### ${nav.label}`);
+      nav.links.forEach(l => L.push(`- [${l.label}](${l.href || '#'})`));
+      L.push('');
+    });
+  }
+
+  if (spec.content?.length) {
+    L.push('## Content Structure');
+    L.push('');
+    spec.content.forEach(c => {
+      L.push(`${'#'.repeat(Math.min(c.level+2,6))} ${c.text}`);
+    });
+    L.push('');
+  }
+  return L.join('\n');
+}
+
+// ================================================================
+// メイン処理
+// ================================================================
+
+let currentSpec = null, currentMd = null;
+
+async function runDistill() {
+  const html = document.getElementById('htmlInput').value.trim();
+  if (!html) { showErr('HTMLを入力してください'); return; }
+
+  const threshold = parseFloat(document.getElementById('thresh').value);
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true; btn.textContent = '処理中…';
+  hideErr();
+  setStep('s1',null); setStep('s2',null); setStep('s3',null);
+  document.getElementById('statsSection').style.display = 'none';
+  switchTab('markdown');
+  document.getElementById('mdOut').textContent = '処理中…';
+  document.getElementById('jsonOut').textContent = '処理中…';
+  document.getElementById('actionList').innerHTML =
+    '<div style="color:var(--text2);padding:20px;text-align:center">処理中…</div>';
+
+  const t0 = performance.now();
+  try {
+    // ① Extraction
+    setStep('s1','active');
+    const extracted = extractFromHTML(html, 'about:blank');
+    const t1 = performance.now();
+    setStep('s1','done'); setMs('s1ms', t1-t0);
+
+    // ② Distillation
+    setStep('s2','active');
+    const scored = await scoreNode(extracted.tree, {}, threshold);
+    const pruned = prune(scored, threshold);
+    const t2 = performance.now();
+    setStep('s2','done'); setMs('s2ms', t2-t1);
+
+    // ③ Transformation
+    setStep('s3','active');
+    const spec = transform(pruned, {
+      title: extracted.title, url: extracted.url,
+      description: extracted.description, lang: extracted.lang,
+      capturedAt: extracted.capturedAt
+    });
+    const md = toMarkdown(spec);
+    const t3 = performance.now();
+    setStep('s3','done'); setMs('s3ms', t3-t2);
+
+    currentSpec = spec; currentMd = md;
+
+    // Stats
+    const orig = extracted.stats.totalNodes;
+    const dist = countNodes(pruned);
+    const comp = Math.round((1 - dist/orig)*100);
+    document.getElementById('stOrig').textContent = orig;
+    document.getElementById('stDist').textContent = dist;
+    document.getElementById('stComp').textContent = `${comp}%`;
+    document.getElementById('stTime').textContent = `${Math.round(t3-t0)}ms`;
+    document.getElementById('statsSection').style.display = 'block';
+    document.getElementById('barOTxt').textContent = `${orig} nodes`;
+    document.getElementById('barDTxt').textContent = `${dist} nodes`;
+    document.getElementById('barD').style.width = `${Math.max(dist/orig*100,4)}%`;
+
+    // Outputs
+    document.getElementById('mdOut').textContent = md;
+    document.getElementById('jsonOut').innerHTML = syntaxHL(JSON.stringify(spec, null, 2));
+    renderActions(spec);
+    switchTab('actions');
+
+  } catch(e) {
+    setStep('s1','error'); setStep('s2','error'); setStep('s3','error');
+    showErr(e.message || '処理に失敗しました');
+    document.getElementById('mdOut').textContent = 'エラーが発生しました';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Distill ▶';
+  }
+}
+
+function countNodes(node) {
+  if (!node) return 0;
+  return 1 + (node.children?.reduce((s,c) => s + countNodes(c), 0) || 0);
+}
+
+function renderActions(spec) {
+  const list = document.getElementById('actionList');
+  const actions = spec?.actions || [];
+  document.getElementById('actionCnt').textContent = `${actions.length} action(s) detected`;
+  if (!actions.length) {
+    list.innerHTML = '<div style="color:var(--text2);text-align:center;padding:40px;font-size:13px">アクションが見つかりませんでした</div>';
+    return;
+  }
+  list.innerHTML = actions.map(a => `
+    <div class="action-card">
+      <div class="action-head">
+        <span class="type-badge t-${a.type}">${a.type}</span>
+        <span class="action-lbl">${esc(a.label)}</span>
+      </div>
+      <div class="action-desc">${esc(a.description)}</div>
+      <span class="action-sel">${esc(a.selector)}</span>
+      ${a.href ? `<div style="font-size:11px;color:var(--text2);margin-top:3px">→ ${esc(a.href)}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+// ================================================================
+// UI ユーティリティ
+// ================================================================
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.querySelector(`[data-tab="${name}"]`).classList.add('active');
+  document.getElementById(`pane-${name}`).classList.add('active');
+}
+
+function setStep(id, state) {
+  const el = document.getElementById(id);
+  el.classList.remove('active','done','error');
+  if (state) el.classList.add(state);
+}
+
+function setMs(id, ms) {
+  document.getElementById(id).textContent = `${Math.round(ms)}ms`;
+}
+
+function showErr(msg) {
+  const b = document.getElementById('errBox');
+  b.textContent = `⚠ ${msg}`; b.classList.add('show');
+}
+function hideErr() { document.getElementById('errBox').classList.remove('show'); }
+
+function copyOut(type) {
+  const text = type === 'md'
+    ? currentMd
+    : JSON.stringify(currentSpec, null, 2);
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    const id = type === 'md' ? 'cpMd' : 'cpJson';
+    const btn = document.getElementById(id);
+    btn.textContent = 'Copied!'; btn.classList.add('done');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('done'); }, 1500);
+  });
+}
+
+function esc(s) {
+  return String(s||'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function syntaxHL(json) {
+  return json.replace(
+    /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+    m => {
+      if (/^"/.test(m)) return /:$/.test(m) ? `<span class="jk">${m}</span>` : `<span class="js">${m}</span>`;
+      if (/true|false/.test(m)) return `<span class="jb">${m}</span>`;
+      if (/null/.test(m))       return `<span class="jl">${m}</span>`;
+      return `<span class="jn">${m}</span>`;
+    }
+  );
+}
+
+// ================================================================
+// サンプルHTML
+// ================================================================
+
+const EXAMPLES = {
+  login: `<!DOCTYPE html>
+<html lang="ja">
+<head><title>ログイン — MyApp</title></head>
+<body>
+  <header>
+    <nav aria-label="メインナビゲーション">
+      <a href="/">ホーム</a>
+      <a href="/about">About</a>
+      <a href="/pricing">料金</a>
+    </nav>
+  </header>
+  <main>
+    <h1>ログイン</h1>
+    <form action="/login" method="post">
+      <label for="email">メールアドレス</label>
+      <input id="email" type="email" name="email"
+        placeholder="you@example.com" required aria-required="true" />
+      <label for="password">パスワード</label>
+      <input id="password" type="password" name="password"
+        placeholder="パスワードを入力" required aria-required="true" />
+      <button type="submit" aria-label="ログイン">ログイン</button>
+      <a href="/forgot">パスワードを忘れた方</a>
+    </form>
+  </main>
+</body>
+</html>`,
+
+  dashboard: `<!DOCTYPE html>
+<html lang="ja">
+<head><title>ダッシュボード — Admin</title></head>
+<body>
+  <nav role="navigation" aria-label="サイドバー">
+    <a href="/dashboard">ダッシュボード</a>
+    <a href="/users">ユーザー管理</a>
+    <a href="/orders">注文管理</a>
+    <a href="/settings">設定</a>
+  </nav>
+  <main role="main">
+    <h1>ダッシュボード</h1>
+    <section aria-label="クイックアクション">
+      <h2>クイックアクション</h2>
+      <button aria-label="ユーザーを追加">ユーザーを追加</button>
+      <button aria-label="レポートをエクスポート">エクスポート</button>
+      <button aria-label="設定を開く">設定</button>
+    </section>
+    <section aria-label="検索">
+      <h2>検索</h2>
+      <input type="search" placeholder="ユーザーを検索…" aria-label="ユーザー検索" />
+      <button type="submit">検索</button>
+    </section>
+    <section aria-label="統計">
+      <h2>統計</h2>
+      <p>総ユーザー数: <strong>1,234</strong></p>
+      <p>今月の注文: <strong>567</strong></p>
+    </section>
+  </main>
+</body>
+</html>`,
+
+  ecommerce: `<!DOCTYPE html>
+<html lang="ja">
+<head><title>商品詳細 — Shop</title></head>
+<body>
+  <header>
+    <nav aria-label="ショップナビ">
+      <a href="/">ホーム</a>
+      <a href="/products">商品一覧</a>
+      <a href="/cart" aria-label="カート (3点)">カート</a>
+      <a href="/account">アカウント</a>
+    </nav>
+    <input type="search" placeholder="商品を検索" aria-label="商品検索" />
+    <button type="submit">検索</button>
+  </header>
+  <main>
+    <h1>プレミアム ワイヤレスヘッドフォン</h1>
+    <p>¥29,800</p>
+    <form>
+      <label for="color">カラー</label>
+      <select id="color" aria-label="カラー選択">
+        <option>ブラック</option>
+        <option>ホワイト</option>
+        <option>ブルー</option>
+      </select>
+      <label for="qty">数量</label>
+      <input id="qty" type="number" value="1" min="1" aria-label="数量" />
+      <button type="submit" aria-label="カートに追加">カートに追加</button>
+      <button type="button" aria-label="お気に入りに追加">♡ お気に入り</button>
+    </form>
+  </main>
+</body>
+</html>`,
+
+  nav: `<!DOCTYPE html>
+<html lang="ja">
+<head><title>ドキュメント</title></head>
+<body>
+  <header role="banner">
+    <nav aria-label="メインナビ">
+      <a href="/docs">ドキュメント</a>
+      <a href="/api">API リファレンス</a>
+      <a href="/blog">ブログ</a>
+      <a href="/changelog">更新履歴</a>
+    </nav>
+    <button aria-label="テーマ切替">🌙</button>
+    <a href="/login">ログイン</a>
+    <a href="/signup">無料で始める</a>
+  </header>
+  <aside role="complementary" aria-label="サイドナビ">
+    <nav aria-label="ドキュメントナビ">
+      <a href="/docs/quickstart">クイックスタート</a>
+      <a href="/docs/install">インストール</a>
+      <a href="/docs/config">設定</a>
+      <a href="/docs/api">API</a>
+    </nav>
+  </aside>
+  <main>
+    <h1>はじめに</h1>
+    <h2>インストール</h2>
+    <p>以下のコマンドでインストールします。</p>
+    <h2>基本的な使い方</h2>
+    <p>セットアップ後、すぐに使い始められます。</p>
+    <nav aria-label="ページナビ">
+      <a href="/docs/prev" aria-label="前のページへ">← 前へ</a>
+      <a href="/docs/next" aria-label="次のページへ">次へ →</a>
+    </nav>
+  </main>
+</body>
+</html>`
+};
+
+function loadExample(name) {
+  document.getElementById('htmlInput').value = EXAMPLES[name] || '';
+}
+
+// ================================================================
+// 起動
+// ================================================================
+initOnnx();
+</script>
+</body>
+</html>
