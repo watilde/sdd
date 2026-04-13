@@ -276,7 +276,7 @@ def train(n_samples: int = 50000):
     onnx_model = convert_sklearn(model, initial_types=initial_type,
                                   target_opset=17)
 
-    output_path = MODEL_DIR / "distiller-v1.onnx"
+    output_path = MODEL_DIR / "sdd-distiller-v1.onnx"
     with open(output_path, "wb") as f:
         f.write(onnx_model.SerializeToString())
     size_kb = output_path.stat().st_size / 1024
@@ -299,7 +299,7 @@ def train(n_samples: int = 50000):
         "top_features": [{"name": k, "importance": float(v)}
                          for k, v in top_features]
     }
-    meta_path = MODEL_DIR / "distiller-v1-meta.json"
+    meta_path = MODEL_DIR / "sdd-distiller-v1-meta.json"
     with open(meta_path, "w") as f:
         json.dump(meta, f, indent=2)
     print(f"[SDD Training] Metadata saved: {meta_path}")

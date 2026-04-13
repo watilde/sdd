@@ -26,7 +26,7 @@ URL → [① Extraction] → [② Distillation] → [③ Transformation] → Act
 - Simplifies structure based on WAI-ARIA accessibility tree (Role/Aria)
 
 ### ② Intelligent Distillation Layer
-- **Tech**: onnxruntime-node (`distiller-v1.onnx`)
+- **Tech**: onnxruntime-node (`sdd-distiller-v1.onnx`)
 - Scores each DOM node from **0.0 to 1.0** based on:
   - Tag type, nesting depth, child composition
   - Interactivity (`isClickable`, `hasEventListeners`)
@@ -192,7 +192,7 @@ Training strategy:
 
 ## Roadmap
 
-- [ ] `distiller-v1.onnx` upload to Hugging Face Hub
+- [ ] `sdd-distiller-v1.onnx` upload to Hugging Face Hub
 - [ ] npm package `sdd` publish
 - [ ] Real training dataset from Storybook crawls
 - [ ] Dynamic DOM capture (modals, dropdowns)

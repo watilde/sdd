@@ -3,7 +3,7 @@
  * 各DOMノードに 0.0〜1.0 の重要度スコアを付与する
  *
  * モード:
- * 1. ONNXモード: distiller-v1.onnx を使った推論 (本番)
+ * 1. ONNXモード: sdd-distiller-v1.onnx を使った推論 (本番)
  * 2. ヒューリスティックモード: ルールベースの推論 (フォールバック / 開発時)
  *
  * ヒューリスティックモデルは学習データなしで動作し、
@@ -17,7 +17,7 @@ import { dirname, join } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const MODEL_PATH = join(__dirname, '../../models/distiller-v1.onnx');
+const MODEL_PATH = join(__dirname, '../../models/sdd-distiller-v1.onnx');
 
 export class ImportanceScorer {
   constructor(options = {}) {

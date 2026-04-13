@@ -516,8 +516,8 @@ async function initOnnx() {
     ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.3/dist/';
     // マルチスレッドはcrossOriginIsolated必須のため無効化（GitHub Pages対応）
     ort.env.wasm.numThreads = 1;
-    // distiller-v1.onnx は同ディレクトリに配置
-    onnxSession = await ort.InferenceSession.create('./distiller-v1.onnx',
+    // sdd-distiller-v1.onnx は同ディレクトリに配置
+    onnxSession = await ort.InferenceSession.create('./sdd-distiller-v1.onnx',
       { executionProviders: ['wasm'] });
     document.getElementById('onnxStatus').textContent = 'ON';
     document.getElementById('onnxStatus').className = 'on';
