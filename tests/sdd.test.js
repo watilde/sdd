@@ -9,7 +9,7 @@ import { FeatureExtractor } from '../src/distillation/FeatureExtractor.js';
 import { ImportanceScorer } from '../src/distillation/ImportanceScorer.js';
 import { ActionOrientedTransformer } from '../src/transformation/ActionOrientedTransformer.js';
 
-// ---- テスト用HTML ----
+// ---- Test HTML fixtures ----
 const SIMPLE_FORM_HTML = `
 <!DOCTYPE html>
 <html lang="en">
@@ -54,7 +54,7 @@ const COMPLEX_DIV_SOUP_HTML = `
         <div class="col">
           <div class="card">
             <div class="card-body">
-              <!-- 深くネストされた意味のないdiv群 -->
+              <!-- Deeply nested meaningless div soup -->
               <div><div><div><div><div>
                 <button data-testid="submit-btn" aria-label="Submit order">
                   Submit Order
@@ -77,22 +77,22 @@ const DASHBOARD_HTML = `
 <html lang="ja">
 <head><title>Dashboard</title></head>
 <body>
-  <nav role="navigation" aria-label="サイドバーナビ">
-    <a href="/dashboard">ダッシュボード</a>
-    <a href="/users">ユーザー管理</a>
-    <a href="/settings">設定</a>
+  <nav role="navigation" aria-label="Sidebar Navigation">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/users">User Management</a>
+    <a href="/settings">Settings</a>
   </nav>
   <main role="main">
-    <h1>ダッシュボード</h1>
-    <h2>概要</h2>
-    <section aria-label="統計">
-      <p>総ユーザー数: <strong>1,234</strong></p>
+    <h1>Dashboard</h1>
+    <h2>Overview</h2>
+    <section aria-label="Statistics">
+      <p>Total Users: <strong>1,234</strong></p>
     </section>
     <section>
-      <h2>操作</h2>
-      <button aria-label="ユーザーを追加">追加</button>
-      <button aria-label="レポートをエクスポート">エクスポート</button>
-      <input type="search" placeholder="ユーザーを検索" aria-label="検索" />
+      <h2>Actions</h2>
+      <button aria-label="Add User">Add</button>
+      <button aria-label="Export Report">Export</button>
+      <input type="search" placeholder="Search users" aria-label="Search" />
     </section>
   </main>
 </body>
@@ -179,8 +179,8 @@ describe('FeatureExtractor', () => {
     expect(normalF.isActionText).toBe(0.0);
   });
 
-  test('should detect Japanese action text', () => {
-    const node = { tag: 'button', text: '送信する', depth: 2 };
+  test('should detect action text in various languages', () => {
+    const node = { tag: 'button', text: 'Submit', depth: 2 };
     const features = extractor.extractFeatures(node);
     expect(features.isActionText).toBe(1.0);
   });
@@ -247,7 +247,7 @@ describe('ImportanceScorer', () => {
       ]
     };
     const pruned = await scorer.pruneTree(tree);
-    // ボタンは残るはず
+    // button should survive pruning
     const hasButton = pruned?.children?.some(c => c.tag === 'button');
     expect(hasButton).toBe(true);
   });
@@ -266,7 +266,7 @@ describe('ImportanceScorer', () => {
       }]
     };
     const pruned = await scorer.pruneTree(tree);
-    // sectionは子があるため残るはず
+    // section should be kept because it has important children
     expect(pruned).not.toBeNull();
     expect(pruned.children?.length).toBeGreaterThan(0);
   });
@@ -434,7 +434,7 @@ describe('ActionOrientedTransformer', () => {
     const spec = transformer.transform(makeScoredTree(), { title: 'Test' });
     spec.actions.forEach(action => {
       expect(action.selector).toBeDefined();
-      // クラス名セレクタ（.xxx）に依存していないこと
+      // must not rely on class name selectors (.xxx)
       expect(action.selector).not.toMatch(/^\.[a-z0-9_-]+$/i);
     });
   });
@@ -466,7 +466,7 @@ describe('SemanticDOMDistiller (Integration)', () => {
 
   test('should compress noisy div-soup HTML', async () => {
     const result = await sdd.distillHTML(COMPLEX_DIV_SOUP_HTML);
-    // 圧縮が起きていること
+    // compression should occur
     expect(result.meta.distilledNodes).toBeLessThan(result.meta.originalNodes);
   }, 15000);
 

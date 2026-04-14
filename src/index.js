@@ -1,6 +1,6 @@
 /**
  * Semantic DOM Distiller (SDD) - Main Entry Point
- * URLを受け取り、Amazon Nova Act向け最適化JSONとMarkdownを返すコアエンジン
+ * Core engine: takes a URL and returns an optimized JSON and Markdown for Amazon Nova Act.
  */
 
 import { DOMExtractor } from './extraction/DOMExtractor.js';
@@ -25,7 +25,7 @@ export class SemanticDOMDistiller {
   }
 
   /**
-   * 初期化（ONNXモデルのロード等）
+   * Initialize the engine (load ONNX model, etc.).
    */
   async initialize() {
     if (this._initialized) return;
@@ -34,7 +34,7 @@ export class SemanticDOMDistiller {
   }
 
   /**
-   * URLを処理してAction-oriented JSONを返す
+   * Process a URL and return an Action-oriented JSON.
    * @param {string} url
    * @returns {Promise<SDDResult>}
    */
@@ -44,18 +44,18 @@ export class SemanticDOMDistiller {
     const startTime = Date.now();
     console.log(`[SDD] Processing: ${url}`);
 
-    // ① Extraction
+    // Step 1: Extraction
     console.log('[SDD] Step 1: Extracting DOM...');
     const extracted = await this.extractor.extract(url);
-    console.log(`[SDD]   → ${extracted.stats.totalNodes} nodes extracted`);
+console.log(`[SDD]   -> ${extracted.stats.totalNodes} nodes extracted`);
 
-    // ② Distillation (Importance Scoring)
+    // Step 2: Distillation (Importance Scoring)
     console.log('[SDD] Step 2: Scoring importance...');
     const scored = await this.scorer.pruneTree(extracted.tree);
     const prunedStats = this._countNodes(scored);
-    console.log(`[SDD]   → ${prunedStats} nodes after pruning (threshold: ${this.options.threshold})`);
+console.log(`[SDD]   -> ${prunedStats} nodes after pruning (threshold: ${this.options.threshold})`);
 
-    // ③ Transformation
+    // Step 3: Transformation
     console.log('[SDD] Step 3: Transforming to Action-oriented JSON...');
     const spec = this.transformer.transform(scored, {
       url: extracted.url,
@@ -83,7 +83,7 @@ export class SemanticDOMDistiller {
   }
 
   /**
-   * HTMLから直接処理（テスト・バッチ処理用）
+   * Process HTML directly (for tests and batch processing).
    * @param {string} html
    * @param {string} [baseUrl]
    * @returns {Promise<SDDResult>}
@@ -125,13 +125,13 @@ export class SemanticDOMDistiller {
   }
 }
 
-// デフォルトエクスポート
+// Default exports
 export { DOMExtractor } from './extraction/DOMExtractor.js';
 export { ImportanceScorer } from './distillation/ImportanceScorer.js';
 export { FeatureExtractor } from './distillation/FeatureExtractor.js';
 export { ActionOrientedTransformer } from './transformation/ActionOrientedTransformer.js';
 
-// CLI エントリーポイント
+// CLI entry point
 if (process.argv[1] && process.argv[1].endsWith('index.js')) {
   const url = process.argv[2];
   if (!url) {

@@ -1,6 +1,6 @@
 /**
  * SDD Demo Server
- * 任意のURLを仕様書（Markdown）に変換するWebインターフェース
+ * Web interface for converting any URL into a Markdown specification.
  */
 
 import express from 'express';
@@ -18,7 +18,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(join(__dirname, 'public')));
 
-// SDD インスタンス（サーバー起動時に初期化）
+// SDD instance (initialized on server startup)
 const sdd = new SemanticDOMDistiller({
   threshold: 0.3,
   timeout: 30000,
@@ -50,7 +50,7 @@ app.post('/api/distill', async (req, res) => {
     return res.status(400).json({ error: 'url is required' });
   }
 
-  // URLバリデーション
+  // URL validation
   let parsedUrl;
   try {
     parsedUrl = new URL(url);
@@ -61,7 +61,7 @@ app.post('/api/distill', async (req, res) => {
     return res.status(400).json({ error: 'Invalid URL format' });
   }
 
-  // スロットリング（Demo用：1リクエスト/5秒）
+  // Throttling (demo: 1 request per 5 seconds)
   const threshold = Math.max(0.1, Math.min(0.9,
     parseFloat(options.threshold) || 0.3
   ));
@@ -94,7 +94,7 @@ app.post('/api/distill', async (req, res) => {
 /**
  * POST /api/distill/html
  * Body: { html: string, baseUrl?: string }
- * HTML文字列を直接処理
+ * Process HTML string directly.
  */
 app.post('/api/distill/html', async (req, res) => {
   if (!initialized) {

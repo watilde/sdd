@@ -1,5 +1,5 @@
 /**
- * SDD CORS Proxy — Cloudflare Worker
+ * SDD CORS Proxy - Cloudflare Worker
  *
  * Usage:
  *   GET https://<worker-url>/?url=https://example.com
@@ -10,12 +10,12 @@
  * - Blocks private/loopback IPs to prevent SSRF
  *
  * Environment variables (set as Worker secrets):
- *   BROWSERLESS_TOKEN — API token for browserless.io
+ *   BROWSERLESS_TOKEN - API token for browserless.io
  */
 
 const ALLOWED_SCHEMES = ['http:', 'https:'];
 
-// SSRF対策: プライベートIP帯をブロック
+// SSRF protection: block private IP ranges
 const PRIVATE_PATTERNS = [
   /^localhost$/i,
   /^127\./,
@@ -94,7 +94,7 @@ export default {
       });
     }
 
-    // ?url= パラメータを取得
+    // Extract ?url= parameter
     const { searchParams } = new URL(request.url);
     const target = searchParams.get('url');
 
@@ -105,7 +105,7 @@ export default {
       });
     }
 
-    // URLバリデーション
+    // URL validation
     let parsed;
     try {
       parsed = new URL(target);
@@ -130,7 +130,7 @@ export default {
       });
     }
 
-    // Browserless トークン (Worker secret か埋め込み値)
+    // Browserless token (from Worker secret or fallback)
     const token = env.BROWSERLESS_TOKEN;
 
     let body;
@@ -141,7 +141,7 @@ export default {
         body = await fetchWithBrowserless(target, token);
         renderMode = 'browserless';
       } catch (e) {
-        // Browserless失敗 → fallback
+        // Browserless failed -> fallback to direct fetch
         try {
           body = await fetchDirect(target);
           renderMode = 'direct-fallback';
@@ -153,7 +153,7 @@ export default {
         }
       }
     } else {
-      // トークン未設定 → direct fetch
+      // No token set -> direct fetch
       try {
         body = await fetchDirect(target);
         renderMode = 'direct';

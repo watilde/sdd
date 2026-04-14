@@ -1,18 +1,18 @@
 /**
  * Feature Extractor
- * SDDノードから重要度スコアリングモデルへの入力特徴量を生成する
+ * Generates input feature vectors for the importance scoring model from SDD nodes.
  *
- * 特徴量の設計思想:
- * - タグの種類 (one-hot)
- * - ネストの深さ (正規化)
- * - インタラクション可能性
- * - 視覚的重み (フォントサイズ、面積)
- * - アクセシビリティ属性の存在
- * - テキスト密度
- * - 子要素の構成
+ * Feature design:
+ * - Tag category (one-hot)
+ * - Nesting depth (normalized)
+ * - Interactivity
+ * - Visual weight (font size, area)
+ * - Presence of accessibility attributes
+ * - Text density
+ * - Child element composition
  */
 
-// 重要度の高いタグ（モデルのヒント）
+// High-importance tags (hints for the model)
 const HIGH_VALUE_TAGS = new Set([
   'button', 'input', 'select', 'textarea', 'a',
   'form', 'nav', 'main', 'h1', 'h2', 'h3', 'table'
@@ -24,7 +24,7 @@ const MEDIUM_VALUE_TAGS = new Set([
   'ul', 'ol', 'li', 'details', 'summary', 'dialog'
 ]);
 
-// ロール別の基底スコア
+// Base scores by ARIA role
 const ROLE_BASE_SCORES = {
   button: 0.85,
   link: 0.80,
@@ -66,25 +66,25 @@ export class FeatureExtractor {
   }
 
   /**
-   * SDDノードツリー全体から特徴量ベクトルを生成
-   * @param {object} node - SDDノード
-   * @param {object} parentContext - 親コンテキスト
+   * Generate a feature vector from a single SDD node.
+   * @param {object} node - SDD node
+   * @param {object} parentContext - Parent context
    * @returns {FeatureVector}
    */
   extractFeatures(node, parentContext = {}) {
     const features = {};
 
-    // === 1. タグカテゴリ特徴量 ===
+    // === 1. Tag category features ===
     features.isHighValueTag = HIGH_VALUE_TAGS.has(node.tag) ? 1.0 : 0.0;
     features.isMediumValueTag = MEDIUM_VALUE_TAGS.has(node.tag) ? 1.0 : 0.0;
     features.isContainerTag = this._isContainer(node.tag) ? 1.0 : 0.0;
 
-    // === 2. インタラクション特徴量 ===
+    // === 2. Interaction features ===
     features.isInteractive = node.isInteractive ? 1.0 : 0.0;
     features.isClickable = node.isClickable ? 1.0 : 0.0;
     features.hasTabIndex = (node.attrs?.tabIndex >= 0) ? 1.0 : 0.0;
 
-    // === 3. アクセシビリティ特徴量 ===
+    // === 3. Accessibility features ===
     features.hasRole = node.role ? 1.0 : 0.0;
     features.roleBaseScore = ROLE_BASE_SCORES[node.role] || 0.0;
     features.hasAriaLabel = node.attrs?.['aria-label'] ? 1.0 : 0.0;
@@ -99,14 +99,14 @@ export class FeatureExtractor {
       node.attrs?.['data-test']
     ) ? 1.0 : 0.0;
 
-    // === 4. テキスト特徴量 ===
+    // === 4. Text features ===
     const textLen = node.text ? node.text.length : 0;
     features.hasText = textLen > 0 ? 1.0 : 0.0;
-    features.textLength = Math.min(textLen / 200, 1.0); // 正規化
+    features.textLength = Math.min(textLen / 200, 1.0); // normalized
     features.isLabelText = this._isLabelLike(node.text) ? 1.0 : 0.0;
     features.isActionText = this._isActionText(node.text) ? 1.0 : 0.0;
 
-    // === 5. 構造特徴量 ===
+    // === 5. Structural features ===
     const childCount = node.children?.length || 0;
     features.childCount = Math.min(childCount / 10, 1.0);
     features.hasChildren = childCount > 0 ? 1.0 : 0.0;
@@ -114,7 +114,7 @@ export class FeatureExtractor {
     features.depth = Math.min((node.depth || 0) / this.maxDepth, 1.0);
     features.depthPenalty = this._depthPenalty(node.depth || 0);
 
-    // === 6. 視覚的特徴量 ===
+    // === 6. Visual features ===
     if (node.visual) {
       const { fontSize, fontWeight, rect } = node.visual;
       features.fontSizeNorm = Math.min(fontSize / this.maxFontSize, 1.0);
@@ -132,7 +132,7 @@ export class FeatureExtractor {
       features.isLargeElement = 0.0;
     }
 
-    // === 7. 属性特徴量 ===
+    // === 7. Attribute features ===
     features.hasHref = node.attrs?.href ? 1.0 : 0.0;
     features.hasAlt = node.attrs?.alt ? 1.0 : 0.0;
     features.hasPlaceholder = node.attrs?.placeholder ? 1.0 : 0.0;
@@ -143,7 +143,7 @@ export class FeatureExtractor {
       ? (7 - node.attrs.level) / 6
       : 0.0;
 
-    // === 8. 親コンテキスト特徴量 ===
+    // === 8. Parent context features ===
     features.parentIsForm = parentContext.isForm ? 1.0 : 0.0;
     features.parentIsNav = parentContext.isNav ? 1.0 : 0.0;
     features.parentIsTable = parentContext.isTable ? 1.0 : 0.0;
@@ -154,7 +154,7 @@ export class FeatureExtractor {
   }
 
   /**
-   * 特徴量ベクトルを Float32Array に変換（ONNX推論用）
+   * Convert feature object to Float32Array for ONNX inference.
    */
   toFloat32Array(features) {
     const keys = this.getFeatureKeys();
@@ -164,7 +164,7 @@ export class FeatureExtractor {
   }
 
   /**
-   * 特徴量キー一覧（順序固定）
+   * Ordered list of feature keys (order must not change).
    */
   getFeatureKeys() {
     return [
@@ -185,7 +185,7 @@ export class FeatureExtractor {
   }
 
   /**
-   * 特徴量ベクトルの次元数
+   * Number of feature dimensions.
    */
   get featureDim() {
     return this.getFeatureKeys().length;
@@ -199,7 +199,7 @@ export class FeatureExtractor {
   }
 
   _depthPenalty(depth) {
-    // 深さに応じてスコアを下げる（浅い要素ほど重要）
+    // Reduce score for deeper elements; shallower elements are more important.
     if (depth <= 3) return 1.0;
     if (depth <= 6) return 0.85;
     if (depth <= 10) return 0.65;
@@ -209,7 +209,7 @@ export class FeatureExtractor {
 
   _isLabelLike(text) {
     if (!text) return false;
-    // ラベル的なテキスト（短く、名詞的）
+    // Label-like text: short and single-line.
     return text.length < 50 && !text.includes('\n');
   }
 
@@ -221,8 +221,9 @@ export class FeatureExtractor {
       'sign in', 'sign up', 'sign out', 'confirm', 'approve', 'reject',
       'download', 'upload', 'export', 'import', 'continue', 'next',
       'previous', 'back', 'close', 'open', 'toggle', 'expand', 'collapse',
-      '送信', '保存', 'キャンセル', '削除', '編集', '検索', 'ログイン',
-      '登録', '確認', '次へ', '戻る', '閉じる', '開く'
+      // Japanese action words
+      '\u9001\u4fe1', '\u4fdd\u5b58', '\u30ad\u30e3\u30f3\u30bb\u30eb', '\u524a\u9664', '\u7de8\u96c6', '\u691c\u7d22', '\u30ed\u30b0\u30a4\u30f3',
+      '\u767b\u9332', '\u78ba\u8a8d', '\u6b21\u3078', '\u623b\u308b', '\u9589\u3058\u308b', '\u958b\u304f'
     ];
     const lower = text.toLowerCase();
     return actionWords.some(w => lower.includes(w));

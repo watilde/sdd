@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -360,7 +360,7 @@
       <!-- HTML mode -->
       <div id="inputHtml" style="display:none">
         <textarea id="htmlInput" rows="8"
-          placeholder="<html>...</html> をここに貼り付け"></textarea>
+          placeholder="Paste <html>...</html> here"></textarea>
         <div class="examples">
           <span style="font-size:11px;color:var(--text2);align-self:center">Examples:</span>
           <button class="ex-btn" onclick="loadExample('login')">Login Form</button>
@@ -375,7 +375,7 @@
     <div class="section">
       <div class="label">Options</div>
       <div class="opt-row">
-        <span class="opt-label">Threshold (枝刈り)</span>
+        <span class="opt-label">Threshold (pruning)</span>
         <input type="range" id="thresh" min="0.1" max="0.9" step="0.05" value="0.3"
           oninput="document.getElementById('threshVal').textContent=this.value">
         <span class="opt-val" id="threshVal">0.3</span>
@@ -385,7 +385,7 @@
     <!-- Run button -->
     <div class="section">
       <button class="btn" id="runBtn" onclick="runDistill()" disabled>
-        モデルを読み込み中…
+        Loading model…
       </button>
       <div class="error-box" id="errBox"></div>
     </div>
@@ -445,11 +445,11 @@
       <div class="welcome">
         <div class="welcome-icon">🧬</div>
         <h2>Semantic DOM Distiller</h2>
-        <p>複雑なHTMLを解析し、Amazon Nova Act 等のマルチモーダルAIが<strong>システム仕様</strong>として理解できる最適化済みJSON / Markdown に変換します。<br><br>推論は <strong>ONNX WebAssembly</strong> でブラウザ内完結。サーバー不要。</p>
+        <p>Analyzes complex HTML and converts it to optimized JSON / Markdown that multimodal AIs such as Amazon Nova Act can understand as a <strong>system specification</strong>.<br><br>Inference runs entirely in your browser via <strong>ONNX WebAssembly</strong>. No server required.</p>
         <div class="how">
-          <div class="how-step"><div class="how-num">1</div><span>HTMLを貼り付け</span></div>
-          <div class="how-step"><div class="how-num">2</div><span>Distill 実行</span></div>
-          <div class="how-step"><div class="how-num">3</div><span>仕様書を取得</span></div>
+          <div class="how-step"><div class="how-num">1</div><span>Paste HTML</span></div>
+          <div class="how-step"><div class="how-num">2</div><span>Run Distill</span></div>
+          <div class="how-step"><div class="how-num">3</div><span>Get specification</span></div>
         </div>
       </div>
     </div>
@@ -462,7 +462,7 @@
       </div>
       <div class="action-list" id="actionList">
         <div style="color:var(--text2);text-align:center;padding:40px;font-size:13px">
-          Distill を実行すると検出されたアクションが表示されます
+          Run Distill to see detected actions
         </div>
       </div>
     </div>
@@ -473,7 +473,7 @@
         <span class="tlbl">Markdown Specification</span>
         <button class="copy-btn" id="cpMd" onclick="copyOut('md')">Copy</button>
       </div>
-      <pre class="md-out" id="mdOut">Distill を実行すると Markdown 仕様書が生成されます…</pre>
+      <pre class="md-out" id="mdOut">Run Distill to generate a Markdown specification…</pre>
     </div>
 
     <!-- JSON -->
@@ -482,21 +482,21 @@
         <span class="tlbl">Action-oriented JSON</span>
         <button class="copy-btn" id="cpJson" onclick="copyOut('json')">Copy</button>
       </div>
-      <div class="json-out" id="jsonOut">Distill を実行すると JSON が生成されます…</div>
+      <div class="json-out" id="jsonOut">Run Distill to generate JSON…</div>
     </div>
   </div><!-- /right -->
 
 </div><!-- /main -->
 
 <!-- ══════════════════════════════════════════
-     SDD ブラウザ実装
-     Node.js版の3レイヤーをそのままブラウザJSに移植
+     SDD Browser Implementation
+     Direct port of the 3-layer Node.js pipeline to browser JS
 ══════════════════════════════════════════ -->
 <script>
 'use strict';
 
 // ================================================================
-// 定数・設定
+// Constants and configuration
 // ================================================================
 
 const REMOVE_TAGS = new Set([
@@ -543,8 +543,9 @@ const ACTION_WORDS = [
   'add','remove','search','login','logout','register','sign in','sign up',
   'sign out','confirm','approve','reject','download','upload','export',
   'import','continue','next','previous','back','close','open','toggle',
-  '送信','保存','キャンセル','削除','編集','検索','ログイン',
-  '登録','確認','次へ','戻る','閉じる','開く',
+  // Japanese action words kept for multilingual support
+  '\u9001\u4fe1','\u4fdd\u5b58','\u30ad\u30e3\u30f3\u30bb\u30eb','\u524a\u9664','\u7de8\u96c6','\u691c\u7d22','\u30ed\u30b0\u30a4\u30f3',
+  '\u767b\u9332','\u78ba\u8a8d','\u6b21\u3078','\u623b\u308b','\u9589\u3058\u308b','\u958b\u304f',
 ];
 
 const INPUT_TYPE_SCORES = {
@@ -554,7 +555,7 @@ const INPUT_TYPE_SCORES = {
 };
 
 // ================================================================
-// ONNX セッション（グローバル）
+// ONNX session (global)
 // ================================================================
 let onnxSession = null;
 
@@ -576,11 +577,11 @@ const FEATURE_KEYS = [
 
 async function initOnnx() {
   try {
-    // WASMファイルはすべてCDNから取得（ローカル404を防ぐ）
+    // Load all WASM files from CDN (prevent local 404 errors)
     ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.3/dist/';
-    // マルチスレッドはcrossOriginIsolated必須のため無効化（GitHub Pages対応）
+    // Disable multi-threading (requires crossOriginIsolated; not available on GitHub Pages)
     ort.env.wasm.numThreads = 1;
-    // sdd-distiller-v1.onnx は同ディレクトリに配置
+    // sdd-distiller-v1.onnx is located in the same directory
     onnxSession = await ort.InferenceSession.create('./sdd-distiller-v1.onnx',
       { executionProviders: ['wasm'] });
     document.getElementById('onnxStatus').textContent = 'ON';
@@ -598,8 +599,8 @@ async function initOnnx() {
 }
 
 // ================================================================
-// ① Extraction Layer（ブラウザ版）
-// DOMParser で解析 → 不要タグ除去 → ノードツリー構築
+// Step 1: Extraction Layer (browser version)
+// Parse with DOMParser -> remove unwanted tags -> build node tree
 // ================================================================
 
 function extractFromHTML(html, baseUrl = 'about:blank') {
@@ -622,7 +623,7 @@ function processNode(el, elMap, depth) {
   const tag = el.tagName.toLowerCase();
   if (REMOVE_TAGS.has(tag)) return null;
 
-  // 非表示判定（静的解析のみ）
+  // Visibility check (static analysis only)
   if (el.hasAttribute('hidden')) return null;
   if (el.getAttribute('aria-hidden') === 'true') return null;
 
@@ -710,8 +711,8 @@ function computeStats(node) {
 }
 
 // ================================================================
-// ② Distillation Layer（ブラウザ版）
-// ONNX WebAssembly 推論 or ヒューリスティック
+// Step 2: Distillation Layer (browser version)
+// ONNX WebAssembly inference or heuristic fallback
 // ================================================================
 
 function extractFeatures(node, parentCtx = {}) {
@@ -751,7 +752,7 @@ function extractFeatures(node, parentCtx = {}) {
   f.depth       = Math.min(depth / 20, 1);
   f.depthPenalty = depth <= 3 ? 1.0 : depth <= 6 ? 0.85 : depth <= 10 ? 0.65 : depth <= 15 ? 0.45 : 0.25;
 
-  // 視覚情報はブラウザ外解析のため推定値
+  // Visual info is estimated since full rendering context is unavailable
   f.fontSizeNorm   = 0.5;
   f.isBold         = 0;
   f.areaRatio      = 0;
@@ -861,7 +862,7 @@ function prune(node, threshold) {
 }
 
 // ================================================================
-// ③ Transformation Layer（ブラウザ版）
+// Step 3: Transformation Layer (browser version)
 // ================================================================
 
 function transform(tree, pageInfo = {}) {
@@ -1087,7 +1088,7 @@ function generateSummary(elements, pageInfo) {
   };
 }
 
-// ── Markdown 生成 ──────────────────────────────────────────
+// -- Markdown generation ----------------------------------------------------------
 function toMarkdown(spec) {
   const L = [];
   L.push(`# Page Specification: ${spec.page.title}`);
@@ -1161,15 +1162,15 @@ function toMarkdown(spec) {
 }
 
 // ================================================================
-// メイン処理
+// Main processing
 // ================================================================
 
 let currentSpec = null, currentMd = null;
 let currentMode = 'url'; // 'url' | 'html'
-let fetchedHtml = '';   // URL fetchで取得したHTML
+let fetchedHtml = '';   // HTML retrieved via URL fetch
 let fetchedUrl  = '';
 
-// ── モード切替 ──────────────────────────────────
+// -- Mode switching -----------------------------------------------
 function switchMode(mode) {
   currentMode = mode;
   document.getElementById('inputUrl').style.display  = mode === 'url'  ? 'block' : 'none';
@@ -1178,7 +1179,7 @@ function switchMode(mode) {
   document.getElementById('modeTabHtml').classList.toggle('active', mode === 'html');
 }
 
-// ── URL Fetch (Cloudflare Worker — CORS proxy) ───────
+// -- URL Fetch (Cloudflare Worker - CORS proxy) -------
 // sdd-cors-proxy: custom Cloudflare Worker that returns raw HTML with CORS headers
 const CORS_PROXY = 'https://sdd-cors-proxy.watilde.workers.dev/?url=';
 
@@ -1193,7 +1194,7 @@ async function fetchUrl() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     fetchedHtml = await res.text();
     fetchedUrl  = url;
-    // レンダリングモードをヘッダーから取得して表示
+    // Read render mode from response header and display
     const renderMode = res.headers.get('X-Render-Mode') || 'unknown';
     const modeLabel = renderMode === 'browserless'
       ? '🖥️ JS-rendered'
@@ -1224,29 +1225,29 @@ function setUrl(url) {
 async function runDistill() {
   let html = '', baseUrl = 'about:blank';
   if (currentMode === 'url') {
-    if (!fetchedHtml) { showErr('Fetch ボタンでページを取得してください'); return; }
+    if (!fetchedHtml) { showErr('Please fetch a page using the Fetch button'); return; }
     html    = fetchedHtml;
     baseUrl = fetchedUrl;
   } else {
     html = document.getElementById('htmlInput').value.trim();
-    if (!html) { showErr('HTMLを入力してください'); return; }
+    if (!html) { showErr('Please enter HTML'); return; }
   }
 
   const threshold = parseFloat(document.getElementById('thresh').value);
   const btn = document.getElementById('runBtn');
-  btn.disabled = true; btn.textContent = '処理中…';
+  btn.disabled = true; btn.textContent = 'Processing…';
   hideErr();
   setStep('s1',null); setStep('s2',null); setStep('s3',null);
   document.getElementById('statsSection').style.display = 'none';
   switchTab('markdown');
-  document.getElementById('mdOut').textContent = '処理中…';
-  document.getElementById('jsonOut').textContent = '処理中…';
+  document.getElementById('mdOut').textContent = 'Processing…';
+  document.getElementById('jsonOut').textContent = 'Processing…';
   document.getElementById('actionList').innerHTML =
-    '<div style="color:var(--text2);padding:20px;text-align:center">処理中…</div>';
+    '<div style="color:var(--text2);padding:20px;text-align:center">Processing…</div>';
 
   const t0 = performance.now();
   try {
-    // ① Extraction
+    // Step 1: Extraction
     setStep('s1','active');
     const extracted = extractFromHTML(html, baseUrl);
     const t1 = performance.now();
@@ -1293,8 +1294,8 @@ async function runDistill() {
 
   } catch(e) {
     setStep('s1','error'); setStep('s2','error'); setStep('s3','error');
-    showErr(e.message || '処理に失敗しました');
-    document.getElementById('mdOut').textContent = 'エラーが発生しました';
+    showErr(e.message || 'Processing failed');
+    document.getElementById('mdOut').textContent = 'An error occurred';
   } finally {
     btn.disabled = false;
     btn.textContent = 'Distill ▶';
@@ -1311,7 +1312,7 @@ function renderActions(spec) {
   const actions = spec?.actions || [];
   document.getElementById('actionCnt').textContent = `${actions.length} action(s) detected`;
   if (!actions.length) {
-    list.innerHTML = '<div style="color:var(--text2);text-align:center;padding:40px;font-size:13px">アクションが見つかりませんでした</div>';
+    list.innerHTML = '<div style="color:var(--text2);text-align:center;padding:40px;font-size:13px">No actions found</div>';
     return;
   }
   list.innerHTML = actions.map(a => `
@@ -1328,7 +1329,7 @@ function renderActions(spec) {
 }
 
 // ================================================================
-// UI ユーティリティ
+// UI utilities
 // ================================================================
 
 function switchTab(name) {
@@ -1386,134 +1387,134 @@ function syntaxHL(json) {
 }
 
 // ================================================================
-// サンプルHTML
+// Sample HTML fixtures
 // ================================================================
 
 const EXAMPLES = {
   login: `<!DOCTYPE html>
-<html lang="ja">
-<head><title>ログイン — MyApp</title></head>
+<html lang="en">
+<head><title>Login — MyApp</title></head>
 <body>
   <header>
-    <nav aria-label="メインナビゲーション">
-      <a href="/">ホーム</a>
+    <nav aria-label="Main Navigation">
+      <a href="/">Home</a>
       <a href="/about">About</a>
-      <a href="/pricing">料金</a>
+      <a href="/pricing">Pricing</a>
     </nav>
   </header>
   <main>
-    <h1>ログイン</h1>
+    <h1>Login</h1>
     <form action="/login" method="post">
-      <label for="email">メールアドレス</label>
+      <label for="email">Email Address</label>
       <input id="email" type="email" name="email"
         placeholder="you@example.com" required aria-required="true" />
-      <label for="password">パスワード</label>
+      <label for="password">Password</label>
       <input id="password" type="password" name="password"
-        placeholder="パスワードを入力" required aria-required="true" />
-      <button type="submit" aria-label="ログイン">ログイン</button>
-      <a href="/forgot">パスワードを忘れた方</a>
+        placeholder="Enter your password" required aria-required="true" />
+      <button type="submit" aria-label="Login">Login</button>
+      <a href="/forgot">Forgot password?</a>
     </form>
   </main>
 </body>
 </html>`,
 
   dashboard: `<!DOCTYPE html>
-<html lang="ja">
-<head><title>ダッシュボード — Admin</title></head>
+<html lang="en">
+<head><title>Dashboard — Admin</title></head>
 <body>
-  <nav role="navigation" aria-label="サイドバー">
-    <a href="/dashboard">ダッシュボード</a>
-    <a href="/users">ユーザー管理</a>
-    <a href="/orders">注文管理</a>
-    <a href="/settings">設定</a>
+  <nav role="navigation" aria-label="Sidebar">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/users">User Management</a>
+    <a href="/orders">Order Management</a>
+    <a href="/settings">Settings</a>
   </nav>
   <main role="main">
-    <h1>ダッシュボード</h1>
-    <section aria-label="クイックアクション">
-      <h2>クイックアクション</h2>
-      <button aria-label="ユーザーを追加">ユーザーを追加</button>
-      <button aria-label="レポートをエクスポート">エクスポート</button>
-      <button aria-label="設定を開く">設定</button>
+    <h1>Dashboard</h1>
+    <section aria-label="Quick Actions">
+      <h2>Quick Actions</h2>
+      <button aria-label="Add User">Add User</button>
+      <button aria-label="Export Report">Export</button>
+      <button aria-label="Open Settings">Settings</button>
     </section>
-    <section aria-label="検索">
-      <h2>検索</h2>
-      <input type="search" placeholder="ユーザーを検索…" aria-label="ユーザー検索" />
-      <button type="submit">検索</button>
+    <section aria-label="Search">
+      <h2>Search</h2>
+      <input type="search" placeholder="Search users…" aria-label="User Search" />
+      <button type="submit">Search</button>
     </section>
-    <section aria-label="統計">
-      <h2>統計</h2>
-      <p>総ユーザー数: <strong>1,234</strong></p>
-      <p>今月の注文: <strong>567</strong></p>
+    <section aria-label="Statistics">
+      <h2>Statistics</h2>
+      <p>Total Users: <strong>1,234</strong></p>
+      <p>Orders This Month: <strong>567</strong></p>
     </section>
   </main>
 </body>
 </html>`,
 
   ecommerce: `<!DOCTYPE html>
-<html lang="ja">
-<head><title>商品詳細 — Shop</title></head>
+<html lang="en">
+<head><title>Product Details — Shop</title></head>
 <body>
   <header>
-    <nav aria-label="ショップナビ">
-      <a href="/">ホーム</a>
-      <a href="/products">商品一覧</a>
-      <a href="/cart" aria-label="カート (3点)">カート</a>
-      <a href="/account">アカウント</a>
+    <nav aria-label="Shop Navigation">
+      <a href="/">Home</a>
+      <a href="/products">Products</a>
+      <a href="/cart" aria-label="Cart (3 items)">Cart</a>
+      <a href="/account">Account</a>
     </nav>
-    <input type="search" placeholder="商品を検索" aria-label="商品検索" />
-    <button type="submit">検索</button>
+    <input type="search" placeholder="Search products" aria-label="Product Search" />
+    <button type="submit">Search</button>
   </header>
   <main>
-    <h1>プレミアム ワイヤレスヘッドフォン</h1>
-    <p>¥29,800</p>
+    <h1>Premium Wireless Headphones</h1>
+    <p>$249.99</p>
     <form>
-      <label for="color">カラー</label>
-      <select id="color" aria-label="カラー選択">
-        <option>ブラック</option>
-        <option>ホワイト</option>
-        <option>ブルー</option>
+      <label for="color">Color</label>
+      <select id="color" aria-label="Select Color">
+        <option>Black</option>
+        <option>White</option>
+        <option>Blue</option>
       </select>
-      <label for="qty">数量</label>
-      <input id="qty" type="number" value="1" min="1" aria-label="数量" />
-      <button type="submit" aria-label="カートに追加">カートに追加</button>
-      <button type="button" aria-label="お気に入りに追加">♡ お気に入り</button>
+      <label for="qty">Quantity</label>
+      <input id="qty" type="number" value="1" min="1" aria-label="Quantity" />
+      <button type="submit" aria-label="Add to Cart">Add to Cart</button>
+      <button type="button" aria-label="Add to Wishlist">♡ Wishlist</button>
     </form>
   </main>
 </body>
 </html>`,
 
   nav: `<!DOCTYPE html>
-<html lang="ja">
-<head><title>ドキュメント</title></head>
+<html lang="en">
+<head><title>Documentation</title></head>
 <body>
   <header role="banner">
-    <nav aria-label="メインナビ">
-      <a href="/docs">ドキュメント</a>
-      <a href="/api">API リファレンス</a>
-      <a href="/blog">ブログ</a>
-      <a href="/changelog">更新履歴</a>
+    <nav aria-label="Main Navigation">
+      <a href="/docs">Documentation</a>
+      <a href="/api">API Reference</a>
+      <a href="/blog">Blog</a>
+      <a href="/changelog">Changelog</a>
     </nav>
-    <button aria-label="テーマ切替">🌙</button>
-    <a href="/login">ログイン</a>
-    <a href="/signup">無料で始める</a>
+    <button aria-label="Toggle Theme">🌙</button>
+    <a href="/login">Login</a>
+    <a href="/signup">Get Started Free</a>
   </header>
-  <aside role="complementary" aria-label="サイドナビ">
-    <nav aria-label="ドキュメントナビ">
-      <a href="/docs/quickstart">クイックスタート</a>
-      <a href="/docs/install">インストール</a>
-      <a href="/docs/config">設定</a>
+  <aside role="complementary" aria-label="Side Navigation">
+    <nav aria-label="Docs Navigation">
+      <a href="/docs/quickstart">Quick Start</a>
+      <a href="/docs/install">Installation</a>
+      <a href="/docs/config">Configuration</a>
       <a href="/docs/api">API</a>
     </nav>
   </aside>
   <main>
-    <h1>はじめに</h1>
-    <h2>インストール</h2>
-    <p>以下のコマンドでインストールします。</p>
-    <h2>基本的な使い方</h2>
-    <p>セットアップ後、すぐに使い始められます。</p>
-    <nav aria-label="ページナビ">
-      <a href="/docs/prev" aria-label="前のページへ">← 前へ</a>
-      <a href="/docs/next" aria-label="次のページへ">次へ →</a>
+    <h1>Getting Started</h1>
+    <h2>Installation</h2>
+    <p>Install with the following command.</p>
+    <h2>Basic Usage</h2>
+    <p>You can start using it immediately after setup.</p>
+    <nav aria-label="Page Navigation">
+      <a href="/docs/prev" aria-label="Go to previous page">← Prev</a>
+      <a href="/docs/next" aria-label="Go to next page">Next →</a>
     </nav>
   </main>
 </body>
@@ -1525,9 +1526,9 @@ function loadExample(name) {
 }
 
 // ================================================================
-// 起動
+// Startup
 // ================================================================
-switchMode('url'); // URLモードをデフォルトに
+switchMode('url'); // Set URL mode as default
 initOnnx();
 </script>
 </body>

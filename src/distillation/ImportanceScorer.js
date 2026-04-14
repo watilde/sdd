@@ -1,13 +1,13 @@
 /**
  * Importance Scorer
- * 各DOMノードに 0.0〜1.0 の重要度スコアを付与する
+ * Assigns an importance score between 0.0 and 1.0 to each DOM node.
  *
- * モード:
- * 1. ONNXモード: sdd-distiller-v1.onnx を使った推論 (本番)
- * 2. ヒューリスティックモード: ルールベースの推論 (フォールバック / 開発時)
+ * Modes:
+ * 1. ONNX mode: inference using sdd-distiller-v1.onnx (production)
+ * 2. Heuristic mode: rule-based scoring (fallback / development)
  *
- * ヒューリスティックモデルは学習データなしで動作し、
- * 十分な精度を持つ実用的なフォールバックとして機能する
+ * The heuristic model operates without training data and serves as
+ * a practical fallback with sufficient accuracy.
  */
 
 import { FeatureExtractor } from './FeatureExtractor.js';
@@ -23,13 +23,13 @@ export class ImportanceScorer {
   constructor(options = {}) {
     this.threshold = options.threshold ?? 0.3;
     this.featureExtractor = new FeatureExtractor(options);
-    this.session = null; // ONNXセッション (遅延初期化)
+    this.session = null; // ONNX session (lazy initialization)
     this.useOnnx = options.useOnnx ?? true;
     this._onnxAvailable = false;
   }
 
   /**
-   * ONNXセッションを初期化（モデルが存在する場合のみ）
+   * Initialize the ONNX session (only if the model file exists).
    */
   async initialize() {
     if (!this.useOnnx) return;
@@ -48,9 +48,9 @@ export class ImportanceScorer {
   }
 
   /**
-   * ノードツリー全体にスコアを付与してフィルタリング
-   * @param {object} tree - 抽出済みSDDノードツリー
-   * @returns {ScoredTree} スコア付きツリー
+   * Score every node in the tree.
+   * @param {object} tree - Extracted SDD node tree
+   * @returns {ScoredTree} Scored tree
    */
   async scoreTree(tree) {
     const scoredTree = await this._scoreNode(tree, {});
@@ -58,9 +58,9 @@ export class ImportanceScorer {
   }
 
   /**
-   * スコアが閾値以下のノードを枝刈りした「機能的DOMツリー」を返す
+   * Return a pruned "functional DOM tree" with nodes below the threshold removed.
    * @param {object} tree
-   * @returns {object} 枝刈り済みツリー
+   * @returns {object} Pruned tree
    */
   async pruneTree(tree) {
     const scored = await this.scoreTree(tree);
@@ -72,10 +72,10 @@ export class ImportanceScorer {
   async _scoreNode(node, parentContext) {
     if (!node) return null;
 
-    // 特徴量を抽出
+    // Extract features
     const features = this.featureExtractor.extractFeatures(node, parentContext);
 
-    // スコア計算
+    // Compute score
     let score;
     if (this._onnxAvailable && this.session) {
       score = await this._onnxInfer(features);
@@ -83,7 +83,7 @@ export class ImportanceScorer {
       score = this._heuristicScore(features, node);
     }
 
-    // 子ノードのコンテキストを構築
+    // Build child context
     const childContext = {
       isForm: node.tag === 'form' || parentContext.isForm,
       isNav: node.tag === 'nav' || node.role === 'navigation' || parentContext.isNav,
@@ -92,7 +92,7 @@ export class ImportanceScorer {
       ancestorScore: Math.max(score, parentContext.ancestorScore || 0) * 0.7
     };
 
-    // 子ノードを再帰処理
+    // Recursively score children
     let children;
     if (node.children && node.children.length > 0) {
       const scoredChildren = await Promise.all(
@@ -104,13 +104,13 @@ export class ImportanceScorer {
     return {
       ...node,
       score: Math.round(score * 1000) / 1000,
-      features: undefined, // ストレージ最適化：特徴量は返さない
+      features: undefined, // Omit features from output to save memory
       children: children?.length > 0 ? children : undefined
     };
   }
 
   /**
-   * ONNXモデルによる推論
+   * Run inference using the ONNX model.
    */
   async _onnxInfer(features) {
     try {
@@ -127,71 +127,71 @@ export class ImportanceScorer {
   }
 
   /**
-   * ヒューリスティックスコアリング（ルールベース）
-   * 特徴量の加重平均 + ボーナス/ペナルティ
+   * Heuristic scoring (rule-based).
+   * Weighted average of features plus bonuses/penalties.
    */
   _heuristicScore(features, node) {
     let score = 0.0;
 
-    // === 基底スコア ===
-    // ロール由来の基底スコア（最重要）
+    // === Base score ===
+    // Role-derived base score (highest weight)
     score += features.roleBaseScore * 0.30;
 
-    // タグカテゴリ
+    // Tag category
     score += features.isHighValueTag * 0.20;
     score += features.isMediumValueTag * 0.08;
 
-    // === インタラクション ===
+    // === Interaction ===
     score += features.isInteractive * 0.18;
     score += features.isClickable * 0.05;
 
-    // === アクセシビリティ ===
+    // === Accessibility ===
     score += features.hasAriaLabel * 0.06;
     score += features.hasAriaRequired * 0.04;
     score += features.hasTestId * 0.03;
     score += features.hasAriaLive * 0.05;
 
-    // === テキスト ===
+    // === Text ===
     score += features.isActionText * 0.12;
     score += features.isLabelText * 0.04;
     score += features.hasText * 0.03;
 
-    // === 視覚的重み ===
+    // === Visual weight ===
     score += features.fontSizeNorm * 0.06;
     score += features.isBold * 0.03;
     score += features.isAboveFold * 0.04;
     score += features.isLargeElement * 0.02;
 
-    // === 属性ボーナス ===
+    // === Attribute bonuses ===
     score += features.hasHref * 0.05;
     score += features.hasPlaceholder * 0.04;
     score += features.isRequired * 0.05;
     score += features.headingLevel * 0.06;
     score += features.inputType * 0.04;
 
-    // === 親コンテキスト ===
+    // === Parent context ===
     score += features.parentIsForm * 0.08;
     score += features.parentIsNav * 0.05;
     score += features.ancestorScore * 0.03;
 
-    // === 深さペナルティ ===
+    // === Depth penalty ===
     score *= features.depthPenalty;
 
-    // === 特殊ルール（絶対値） ===
-    // disabled要素は重要度を大幅に下げる
+    // === Special rules (absolute overrides) ===
+    // Significantly reduce importance of disabled elements
     if (features.isDisabled) score *= 0.3;
 
-    // コンテナで子もなくテキストもない場合
+    // Container with no children and no text
     if (features.isContainerTag && !features.hasChildren && !features.hasText) {
       score *= 0.1;
     }
 
-    // フォーム内の要素は重要度を上げる
+    // Boost interactive elements inside a form
     if (features.parentIsForm && features.isInteractive) {
       score = Math.max(score, 0.7);
     }
 
-    // ナビゲーション内のリンクは重要
+    // Links inside navigation are important
     if (features.parentIsNav && features.hasHref) {
       score = Math.max(score, 0.65);
     }
@@ -200,12 +200,12 @@ export class ImportanceScorer {
   }
 
   /**
-   * 閾値以下のノードを枝刈り（ただし重要な子を持つノードは保持）
+   * Prune nodes below the threshold (but retain nodes with important children).
    */
   _prune(node) {
     if (!node) return null;
 
-    // 子を先に枝刈り
+    // Prune children first
     let prunedChildren;
     if (node.children && node.children.length > 0) {
       prunedChildren = node.children
@@ -213,7 +213,7 @@ export class ImportanceScorer {
         .filter(Boolean);
     }
 
-    // スコアが閾値未満でも、重要な子を持つ場合は保持
+    // Keep node if it has important children, even if its own score is below threshold
     const hasImportantChildren = prunedChildren?.some(c => c.score >= this.threshold);
 
     if (node.score < this.threshold && !hasImportantChildren) {

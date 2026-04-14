@@ -1,22 +1,22 @@
 /**
  * Extraction Layer
- * Playwright を使って実際のDOMを取得し、不要要素を除去する
- * - 非表示要素の物理的削除
- * - script/style/svg等のメタデータ除去
- * - アクセシビリティツリー(Role/Aria)ベースの構造解析
+ * Fetches the real DOM via Playwright and removes unnecessary elements.
+ * - Physically removes hidden elements
+ * - Removes metadata tags (script/style/svg etc.)
+ * - Analyzes structure based on accessibility tree (Role/Aria)
  */
 
 import { chromium } from 'playwright';
 import { JSDOM } from 'jsdom';
 
-// 除去対象タグ
+// Tags to remove
 const REMOVE_TAGS = new Set([
   'script', 'style', 'noscript', 'svg', 'canvas',
   'iframe', 'object', 'embed', 'link', 'meta',
   'head', 'template', 'slot'
 ]);
 
-// WAI-ARIA のロールマッピング（タグ名→暗黙的ロール）
+// WAI-ARIA implicit role mapping (tag name -> implicit role)
 const IMPLICIT_ROLES = {
   a: 'link',
   article: 'article',
@@ -50,7 +50,7 @@ const IMPLICIT_ROLES = {
   ul: 'list',
 };
 
-// インタラクティブタグ
+// Interactive tags
 const INTERACTIVE_TAGS = new Set([
   'a', 'button', 'input', 'select', 'textarea',
   'details', 'summary', 'label'
@@ -69,7 +69,7 @@ export class DOMExtractor {
   }
 
   /**
-   * URLからDOMを取得して抽出処理を実行
+   * Fetch DOM from URL and run extraction.
    * @param {string} url
    * @returns {Promise<ExtractedDOM>}
    */
@@ -83,23 +83,23 @@ export class DOMExtractor {
     try {
       const page = await context.newPage();
 
-      // ページ読み込み
+      // Load page
       await page.goto(url, {
         timeout: this.options.timeout,
         waitUntil: this.options.waitUntil
       });
 
-      // 動的コンテンツ待機
+      // Wait for dynamic content
       await page.waitForTimeout(500);
 
-      // ページメタ情報収集
+      // Collect page meta information
       const meta = await this._collectPageMeta(page);
 
-      // 可視要素の座標・スタイル情報をブラウザ側で収集
+      // Collect element coordinates and style data in browser context
       const rawDOM = await page.content();
       const elementMap = await this._collectElementData(page);
 
-      // DOM解析・クリーニング
+      // Parse and clean DOM
       const cleanedTree = this._parseAndClean(rawDOM, elementMap);
 
       return {
@@ -119,7 +119,7 @@ export class DOMExtractor {
   }
 
   /**
-   * HTMLの文字列から直接抽出（テスト・ユニット用）
+   * Extract directly from an HTML string (for tests and batch processing).
    * @param {string} html
    * @param {string} [baseUrl]
    * @returns {ExtractedDOM}
@@ -141,7 +141,7 @@ export class DOMExtractor {
   }
 
   /**
-   * ページ全体のメタ情報を収集
+   * Collect page-level metadata.
    */
   async _collectPageMeta(page) {
     return await page.evaluate(() => {
@@ -155,7 +155,7 @@ export class DOMExtractor {
   }
 
   /**
-   * Playwright経由で各要素の可視性・スタイル・イベント情報を収集
+   * Collect visibility, style, and event data for each element via Playwright.
    */
   async _collectElementData(page) {
     const data = await page.evaluate(() => {
@@ -167,7 +167,7 @@ export class DOMExtractor {
           const style = window.getComputedStyle(el);
           const rect = el.getBoundingClientRect();
 
-          // ユニークIDを付与
+          // Assign a unique ID
           el.setAttribute('data-sdd-id', String(index));
 
           const isHidden =
@@ -219,21 +219,21 @@ export class DOMExtractor {
               : null
           });
         } catch (e) {
-          // 一部の要素は取得できない場合がある
+          // Some elements may not be accessible
         }
       });
 
       return result;
     });
 
-    // Map<sddId, elementData> に変換
+    // Convert to Map<sddId, elementData>
     const map = new Map();
     data.forEach(d => map.set(d.sddId, d));
     return map;
   }
 
   /**
-   * HTML文字列をパースしてクリーニング済みのノードツリーを返す
+   * Parse HTML string and return a cleaned node tree.
    */
   _parseAndClean(html, elementMap) {
     const dom = new JSDOM(html);
@@ -244,50 +244,50 @@ export class DOMExtractor {
   }
 
   /**
-   * ノードを再帰的に処理してSDDノードツリーを構築
+   * Recursively process nodes to build the SDD node tree.
    */
   _processNode(element, elementMap, depth) {
     if (!element || depth > this.options.maxDepth) return null;
-    if (element.nodeType !== 1) return null; // Element nodeのみ
+    if (element.nodeType !== 1) return null; // Element nodes only
 
     const tagName = element.tagName.toLowerCase();
 
-    // 除去対象タグをスキップ
+    // Skip tags that should be removed
     if (REMOVE_TAGS.has(tagName)) return null;
 
-    // data-sdd-id から Playwright収集データを取得
+    // Retrieve Playwright-collected data via data-sdd-id
     const sddId = parseInt(element.getAttribute('data-sdd-id'));
     const elData = elementMap.get(sddId);
 
-    // 非表示要素のスキップ（Playwright収集データがある場合）
+    // Skip hidden elements (when Playwright data is available)
     if (!this.options.includeHidden && elData?.isHidden) return null;
 
-    // テキストコンテンツを抽出（直接の子テキストノードのみ）
+    // Extract text content (direct child text nodes only)
     const directText = this._extractDirectText(element);
 
-    // 子ノードを再帰処理
+    // Recursively process children
     const children = [];
     for (const child of element.children) {
       const childNode = this._processNode(child, elementMap, depth + 1);
       if (childNode) children.push(childNode);
     }
 
-    // ロールを決定（明示的aria-role > 暗黙的ロール）
+    // Determine role (explicit aria-role takes priority over implicit role)
     const role = element.getAttribute('role') ||
       elData?.role ||
       IMPLICIT_ROLES[tagName] ||
       null;
 
-    // インタラクション可能性を判定
+    // Determine interactivity
     const isInteractive = this._isInteractive(element, elData, tagName, role);
 
-    // 空コンテナは最適化（子が1つで自身がdiv/spanの場合）
-    // ただしインタラクティブな場合は保持
+    // Optimize empty containers (div/span with no children)
+    // but keep them if they are interactive
     if (!isInteractive && children.length === 0 && !directText) {
       return null;
     }
 
-    // SDDノードを構築
+    // Build SDD node
     const node = {
       tag: tagName,
       role,
@@ -306,12 +306,12 @@ export class DOMExtractor {
       children: children.length > 0 ? children : undefined
     };
 
-    // 不要なnullフィールドを削除
+    // Remove null fields to reduce payload
     return this._compact(node);
   }
 
   /**
-   * 直接の子テキストノードのみ取得
+   * Get direct child text nodes only.
    */
   _extractDirectText(element) {
     let text = '';
@@ -325,7 +325,7 @@ export class DOMExtractor {
   }
 
   /**
-   * インタラクション可能性の判定
+   * Determine whether a node is interactive.
    */
   _isInteractive(element, elData, tagName, role) {
     if (INTERACTIVE_TAGS.has(tagName)) return true;
@@ -338,7 +338,7 @@ export class DOMExtractor {
   }
 
   /**
-   * セマンティックな属性のみを抽出（クラス名・style等のノイズを除去）
+   * Extract only semantic attributes (remove noise such as class names and style).
    */
   _extractSemanticAttrs(element, tagName) {
     const attrs = {};
@@ -368,13 +368,13 @@ export class DOMExtractor {
   }
 
   /**
-   * Tailwind等の難読化クラスを除去し、セマンティッククラスのみ保持
+   * Remove obfuscated classes (e.g. Tailwind utilities) and keep only semantic class names.
    */
   _normalizeClassName(className) {
     if (!className) return null;
-    // BEM記法・意味のある長さのクラスのみ残す
+    // Keep only BEM-style or meaningfully-named classes
     const classes = className.split(/\s+/).filter(c => {
-      // Tailwindクラスの特徴：短い、特殊文字含む、数値含む
+      // Tailwind class characteristics: short, contains special chars or numbers
       if (c.length < 3) return false;
       if (/^[a-z]+-\d+$/.test(c)) return false; // mt-4, px-2 etc
       if (/^(flex|grid|block|inline|hidden|absolute|relative|fixed|sticky)$/.test(c)) return false;
@@ -385,7 +385,7 @@ export class DOMExtractor {
   }
 
   /**
-   * null/undefinedフィールドを削除してオブジェクトを軽量化
+   * Remove null/undefined fields to reduce object size.
    */
   _compact(obj) {
     const result = {};
@@ -398,7 +398,7 @@ export class DOMExtractor {
   }
 
   /**
-   * ツリーの統計情報を計算
+   * Compute statistics for the node tree.
    */
   _computeStats(tree) {
     let totalNodes = 0;

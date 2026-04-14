@@ -1,12 +1,12 @@
 /**
  * Transformation Layer
- * スコアリング済みのSDDツリーを「Action-oriented JSON」に変換する
+ * Converts a scored SDD tree into an Action-oriented JSON.
  *
- * 設計思想:
- * - IDやクラス名ではなくセマンティックなラベルを付与
- * - Amazon Nova Act が解釈しやすい構造
- * - 「このボタンは『保存』の役割を持つ」という自然言語的な記述
- * - アクション可能な要素を中心に構造化
+ * Design principles:
+ * - Assign semantic labels instead of IDs or class names
+ * - Structure optimized for Amazon Nova Act to interpret
+ * - Natural-language descriptions (e.g. "this button performs 'Save'")
+ * - Structured around actionable elements
  */
 
 export class ActionOrientedTransformer {
@@ -20,9 +20,9 @@ export class ActionOrientedTransformer {
   }
 
   /**
-   * スコアリング済みツリーをAction-oriented JSONに変換
+   * Convert a scored tree to Action-oriented JSON.
    * @param {object} scoredTree
-   * @param {object} pageInfo - ページのメタ情報
+   * @param {object} pageInfo - Page metadata
    * @returns {ActionOrientedSpec}
    */
   transform(scoredTree, pageInfo = {}) {
@@ -48,7 +48,7 @@ export class ActionOrientedTransformer {
       interactive: this._extractAllInteractive(elements)
     };
 
-    // グルーピングが不要な場合は削除
+    // Remove grouping sections if not needed
     if (!this.options.groupBySection) {
       delete spec.forms;
       delete spec.navigation;
@@ -59,8 +59,8 @@ export class ActionOrientedTransformer {
   }
 
   /**
-   * Action-oriented JSONをMarkdown仕様書に変換
-   * Amazon Nova Act / LLMに渡す形式
+   * Convert Action-oriented JSON to a Markdown specification.
+   * Format intended for Amazon Nova Act / LLMs.
    * @param {ActionOrientedSpec} spec
    * @returns {string} Markdown
    */
@@ -76,7 +76,7 @@ export class ActionOrientedTransformer {
     lines.push(`**Captured**: ${spec.page.capturedAt}`);
     lines.push('');
 
-    // サマリー
+    // Summary
     lines.push('## Summary');
     lines.push('');
     lines.push(spec.summary.description);
@@ -87,7 +87,7 @@ export class ActionOrientedTransformer {
     lines.push(`- **Primary actions**: ${spec.summary.primaryActionCount}`);
     lines.push('');
 
-    // アクション一覧
+    // Actions list
     if (spec.actions && spec.actions.length > 0) {
       lines.push('## Available Actions');
       lines.push('');
@@ -107,7 +107,7 @@ export class ActionOrientedTransformer {
       });
     }
 
-    // フォーム一覧
+    // Forms list
     if (spec.forms && spec.forms.length > 0) {
       lines.push('## Forms');
       lines.push('');
@@ -125,7 +125,7 @@ export class ActionOrientedTransformer {
       });
     }
 
-    // ナビゲーション
+    // Navigation
     if (spec.navigation && spec.navigation.length > 0) {
       lines.push('## Navigation');
       lines.push('');
@@ -138,7 +138,7 @@ export class ActionOrientedTransformer {
       });
     }
 
-    // コンテンツ構造
+    // Content structure
     if (spec.content && spec.content.length > 0) {
       lines.push('## Content Structure');
       lines.push('');
@@ -155,7 +155,7 @@ export class ActionOrientedTransformer {
   // ---- Private methods ----
 
   /**
-   * ツリーを再帰的に走査して要素リストを収集
+   * Recursively traverse the tree and collect element list.
    */
   _collectElements(node, elements, parentSection) {
     if (!node) return;
@@ -163,7 +163,7 @@ export class ActionOrientedTransformer {
     const element = this._nodeToElement(node, parentSection);
     if (element) elements.push(element);
 
-    // セクション要素の場合は子のコンテキストを更新
+    // Update child context for section elements
     const section = this._getSectionLabel(node) || parentSection;
 
     if (node.children) {
@@ -174,7 +174,7 @@ export class ActionOrientedTransformer {
   }
 
   /**
-   * SDDノードを統一Element形式に変換
+   * Convert a SDD node to the unified Element format.
    */
   _nodeToElement(node, parentSection) {
     const tag = node.tag;
@@ -182,7 +182,7 @@ export class ActionOrientedTransformer {
     const attrs = node.attrs || {};
     const text = node.text || '';
 
-    // セレクタ生成（優先順位: aria-label > text > id > type+tag）
+    // Generate selector (priority: aria-label > text > id > type+tag)
     const selector = this._generateSelector(node);
     const label = this._generateLabel(node);
 
@@ -214,14 +214,13 @@ export class ActionOrientedTransformer {
   }
 
   /**
-   * セマンティックセレクタを生成
-   * IDやクラスに依存せず、役割とコンテキストから生成
+   * Generate a semantic selector based on role and context, without relying on IDs or class names.
    */
   _generateSelector(node) {
     const attrs = node.attrs || {};
     const parts = [];
 
-    // 1. aria-label が最も確実
+    // 1. aria-label is the most reliable
     if (attrs['aria-label']) {
       return `[aria-label="${attrs['aria-label']}"]`;
     }
@@ -241,7 +240,7 @@ export class ActionOrientedTransformer {
       return `${node.role}:contains("${node.text.slice(0, 30)}")`;
     }
 
-    // 5. タグ + type + placeholder
+    // 5. tag + type + placeholder
     if (node.tag === 'input' && attrs.type) {
       if (attrs.placeholder) {
         return `input[type="${attrs.type}"][placeholder="${attrs.placeholder}"]`;
@@ -249,12 +248,12 @@ export class ActionOrientedTransformer {
       return `input[type="${attrs.type}"]`;
     }
 
-    // 6. タグ + テキスト
+    // 6. tag + text
     if (node.text) {
       return `${node.tag}:contains("${node.text.slice(0, 30)}")`;
     }
 
-    // 7. タグ + role
+    // 7. tag + role
     if (node.role) {
       return `[role="${node.role}"]`;
     }
@@ -263,28 +262,28 @@ export class ActionOrientedTransformer {
   }
 
   /**
-   * セマンティックラベルを生成
+   * Generate a semantic label.
    */
   _generateLabel(node) {
     const attrs = node.attrs || {};
 
-    // aria-label が最優先
+    // aria-label takes highest priority
     if (attrs['aria-label']) return attrs['aria-label'];
 
-    // alt テキスト
+    // alt text
     if (attrs.alt) return attrs.alt;
 
-    // テキストコンテンツ
+    // Text content
     if (node.text && node.text.trim()) return node.text.trim();
 
     // placeholder
     if (attrs.placeholder) return `Input: ${attrs.placeholder}`;
 
-    // role + type で推定
+    // Infer from role + type
     if (node.role === 'button' && attrs.type === 'submit') return 'Submit Button';
     if (node.role === 'button' && attrs.type === 'reset') return 'Reset Button';
 
-    // href から推定
+    // Infer from href
     if (attrs.href) {
       const href = attrs.href;
       if (href === '/' || href === '#') return 'Home Link';
@@ -296,7 +295,7 @@ export class ActionOrientedTransformer {
   }
 
   /**
-   * セクション判定（ナビ、フォーム、メインコンテンツ等）
+   * Determine section type (nav, form, main content, etc.).
    */
   _getSectionLabel(node) {
     const roleMap = {
@@ -321,7 +320,7 @@ export class ActionOrientedTransformer {
   }
 
   /**
-   * アクション一覧を抽出（ボタン・リンク等）
+   * Extract action list (buttons, links, etc.).
    */
   _extractActions(elements) {
     return elements
@@ -340,7 +339,7 @@ export class ActionOrientedTransformer {
   }
 
   /**
-   * アクションタイプを判定
+   * Determine action type.
    */
   _getActionType(el) {
     if (el.role === 'link' || el.tag === 'a') return 'navigate';
@@ -358,7 +357,7 @@ export class ActionOrientedTransformer {
   }
 
   /**
-   * アクションの説明文を生成
+   * Generate action description text.
    */
   _generateActionDescription(el) {
     const label = el.label || el.text || '';
@@ -380,7 +379,7 @@ export class ActionOrientedTransformer {
   }
 
   /**
-   * フォームを抽出
+   * Extract forms.
    */
   _extractForms(elements) {
     const formElements = elements.filter(el =>
@@ -390,7 +389,7 @@ export class ActionOrientedTransformer {
     const forms = [];
     const processedForms = new Set();
 
-    // フォームをグループ化
+    // Group forms
     for (const el of elements) {
       if (el.tag === 'form') {
         const formKey = el.selector;
@@ -420,7 +419,7 @@ export class ActionOrientedTransformer {
       }
     }
 
-    // フォームタグがなくても入力フィールドがある場合
+    // Handle input fields even without an explicit form tag
     if (forms.length === 0) {
       const fields = elements.filter(el =>
         ['input', 'select', 'textarea'].includes(el.tag) &&
@@ -446,7 +445,7 @@ export class ActionOrientedTransformer {
   }
 
   /**
-   * ナビゲーションを抽出
+   * Extract navigation.
    */
   _extractNavigation(elements) {
     const navLinks = elements.filter(el =>
@@ -456,7 +455,7 @@ export class ActionOrientedTransformer {
     );
 
     if (navLinks.length === 0) {
-      // headerやfooter内のリンクも収集
+      // Also collect links inside header/footer
       const allLinks = elements.filter(el =>
         (el.role === 'link' || el.tag === 'a') &&
         el.label &&
@@ -485,7 +484,7 @@ export class ActionOrientedTransformer {
   }
 
   /**
-   * コンテンツ構造（見出し）を抽出
+   * Extract content structure (headings).
    */
   _extractContent(elements) {
     return elements
@@ -499,7 +498,7 @@ export class ActionOrientedTransformer {
   }
 
   /**
-   * 全インタラクティブ要素を抽出
+   * Extract all interactive elements.
    */
   _extractAllInteractive(elements) {
     return elements
@@ -515,7 +514,7 @@ export class ActionOrientedTransformer {
   }
 
   /**
-   * ページサマリーを生成
+   * Generate page summary.
    */
   _generateSummary(elements, pageInfo) {
     const interactiveCount = elements.filter(el => el.isInteractive).length;
@@ -552,6 +551,6 @@ export class ActionOrientedTransformer {
   }
 
   _extractFormParams(el) {
-    return undefined; // 個別フォームフィールドから収集するため省略
+    return undefined; // Collected from individual form fields; omitted here
   }
 }
