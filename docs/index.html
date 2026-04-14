@@ -89,10 +89,50 @@
       border-radius: var(--radius); color: var(--text); font-size: 12px;
       font-family: 'Cascadia Code', 'Fira Code', monospace;
       padding: 10px; resize: vertical; outline: none;
-      transition: border-color .15s; min-height: 160px;
+      transition: border-color .15s; min-height: 140px;
     }
     textarea:focus { border-color: var(--accent); }
     textarea::placeholder { color: var(--text3); }
+
+    /* input mode tabs */
+    .mode-tabs {
+      display: flex; gap: 0; margin-bottom: 8px;
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 3px; width: fit-content;
+    }
+    .mode-tab {
+      padding: 4px 12px; font-size: 11px; font-weight: 600;
+      border-radius: 6px; cursor: pointer; transition: all .15s;
+      color: var(--text2); user-select: none;
+    }
+    .mode-tab.active {
+      background: var(--accent); color: #0d1117;
+    }
+    .mode-tab:not(.active):hover { color: var(--text); }
+
+    /* URL input row */
+    .url-row { display: flex; gap: 6px; }
+    .url-input {
+      flex: 1; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: var(--radius); color: var(--text); font-size: 12px;
+      padding: 8px 10px; outline: none; transition: border-color .15s;
+    }
+    .url-input:focus { border-color: var(--accent); }
+    .url-input::placeholder { color: var(--text3); }
+    .fetch-btn {
+      background: var(--bg3); border: 1px solid var(--border);
+      color: var(--text2); font-size: 11px; font-weight: 600;
+      padding: 0 12px; border-radius: var(--radius); cursor: pointer;
+      transition: all .15s; white-space: nowrap;
+    }
+    .fetch-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .fetch-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .fetch-status {
+      font-size: 11px; color: var(--text2); margin-top: 5px;
+      min-height: 16px;
+    }
+    .fetch-status.ok  { color: var(--accent2); }
+    .fetch-status.err { color: var(--accent3); }
 
     .examples { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
     .ex-btn {
@@ -293,17 +333,41 @@
   <!-- ══════════════ Left Panel ══════════════ -->
   <div class="left">
 
-    <!-- HTML input -->
+    <!-- Input mode: URL / HTML -->
     <div class="section">
-      <div class="label">HTML を貼り付け</div>
-      <textarea id="htmlInput" rows="9"
-        placeholder="<html>...</html> をここに貼り付けてください&#10;&#10;右の Examples ボタンでサンプルを試せます"></textarea>
-      <div class="examples">
-        <span style="font-size:11px;color:var(--text2);align-self:center">Examples:</span>
-        <button class="ex-btn" onclick="loadExample('login')">Login Form</button>
-        <button class="ex-btn" onclick="loadExample('dashboard')">Dashboard</button>
-        <button class="ex-btn" onclick="loadExample('ecommerce')">E-Commerce</button>
-        <button class="ex-btn" onclick="loadExample('nav')">Navigation</button>
+      <!-- Mode toggle -->
+      <div class="mode-tabs">
+        <div class="mode-tab active" id="modeTabUrl" onclick="switchMode('url')">URL</div>
+        <div class="mode-tab"        id="modeTabHtml" onclick="switchMode('html')">HTML</div>
+      </div>
+
+      <!-- URL mode -->
+      <div id="inputUrl">
+        <div class="url-row">
+          <input type="url" class="url-input" id="urlInput"
+            placeholder="https://example.com" />
+          <button class="fetch-btn" id="fetchBtn" onclick="fetchUrl()">Fetch</button>
+        </div>
+        <div class="fetch-status" id="fetchStatus"></div>
+        <div class="examples" style="margin-top:8px">
+          <span style="font-size:11px;color:var(--text2);align-self:center">Examples:</span>
+          <button class="ex-btn" onclick="setUrl('https://example.com')">example.com</button>
+          <button class="ex-btn" onclick="setUrl('https://github.com')">GitHub</button>
+          <button class="ex-btn" onclick="setUrl('https://news.ycombinator.com')">HN</button>
+        </div>
+      </div>
+
+      <!-- HTML mode -->
+      <div id="inputHtml" style="display:none">
+        <textarea id="htmlInput" rows="8"
+          placeholder="<html>...</html> をここに貼り付け"></textarea>
+        <div class="examples">
+          <span style="font-size:11px;color:var(--text2);align-self:center">Examples:</span>
+          <button class="ex-btn" onclick="loadExample('login')">Login Form</button>
+          <button class="ex-btn" onclick="loadExample('dashboard')">Dashboard</button>
+          <button class="ex-btn" onclick="loadExample('ecommerce')">E-Commerce</button>
+          <button class="ex-btn" onclick="loadExample('nav')">Navigation</button>
+        </div>
       </div>
     </div>
 
@@ -1101,10 +1165,65 @@ function toMarkdown(spec) {
 // ================================================================
 
 let currentSpec = null, currentMd = null;
+let currentMode = 'url'; // 'url' | 'html'
+let fetchedHtml = '';   // URL fetchで取得したHTML
+let fetchedUrl  = '';
+
+// ── モード切替 ──────────────────────────────────
+function switchMode(mode) {
+  currentMode = mode;
+  document.getElementById('inputUrl').style.display  = mode === 'url'  ? 'block' : 'none';
+  document.getElementById('inputHtml').style.display = mode === 'html' ? 'block' : 'none';
+  document.getElementById('modeTabUrl').classList.toggle('active',  mode === 'url');
+  document.getElementById('modeTabHtml').classList.toggle('active', mode === 'html');
+}
+
+// ── URL Fetch (allorigins.win CORSプロキシ) ──────
+async function fetchUrl() {
+  const url = document.getElementById('urlInput').value.trim();
+  if (!url) { setFetchStatus('Please enter a URL', 'err'); return; }
+  const btn = document.getElementById('fetchBtn');
+  btn.disabled = true; btn.textContent = 'Fetching…';
+  setFetchStatus('Fetching…', '');
+  try {
+    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxy);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data.contents) throw new Error('Empty response');
+    fetchedHtml = data.contents;
+    fetchedUrl  = url;
+    setFetchStatus(`✓ Fetched — ${fetchedHtml.length.toLocaleString()} chars`, 'ok');
+  } catch(e) {
+    setFetchStatus(`✗ ${e.message}`, 'err');
+    fetchedHtml = '';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Fetch';
+  }
+}
+
+function setFetchStatus(msg, cls) {
+  const el = document.getElementById('fetchStatus');
+  el.textContent = msg;
+  el.className = 'fetch-status' + (cls ? ' ' + cls : '');
+}
+
+function setUrl(url) {
+  document.getElementById('urlInput').value = url;
+  fetchedHtml = ''; fetchedUrl = '';
+  setFetchStatus('', '');
+}
 
 async function runDistill() {
-  const html = document.getElementById('htmlInput').value.trim();
-  if (!html) { showErr('HTMLを入力してください'); return; }
+  let html = '', baseUrl = 'about:blank';
+  if (currentMode === 'url') {
+    if (!fetchedHtml) { showErr('Fetch ボタンでページを取得してください'); return; }
+    html    = fetchedHtml;
+    baseUrl = fetchedUrl;
+  } else {
+    html = document.getElementById('htmlInput').value.trim();
+    if (!html) { showErr('HTMLを入力してください'); return; }
+  }
 
   const threshold = parseFloat(document.getElementById('thresh').value);
   const btn = document.getElementById('runBtn');
@@ -1122,7 +1241,7 @@ async function runDistill() {
   try {
     // ① Extraction
     setStep('s1','active');
-    const extracted = extractFromHTML(html, 'about:blank');
+    const extracted = extractFromHTML(html, baseUrl);
     const t1 = performance.now();
     setStep('s1','done'); setMs('s1ms', t1-t0);
 
@@ -1401,7 +1520,7 @@ function loadExample(name) {
 // ================================================================
 // 起動
 // ================================================================
-loadExample('login'); // ページ読み込み時にLoginサンプルを初期表示
+switchMode('url'); // URLモードをデフォルトに
 initOnnx();
 </script>
 </body>
