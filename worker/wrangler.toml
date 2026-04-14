@@ -1,0 +1,4 @@
+name = "sdd-cors-proxy"
+main = "index.js"
+compatibility_date = "2024-04-01"
+workers_dev = true

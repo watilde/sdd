@@ -1178,9 +1178,9 @@ function switchMode(mode) {
   document.getElementById('modeTabHtml').classList.toggle('active', mode === 'html');
 }
 
-// ── URL Fetch (allorigins.win — CORS proxy) ───────
-// allorigins.win/raw: returns raw HTML with CORS headers, no JSON wrapper
-const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
+// ── URL Fetch (Cloudflare Worker — CORS proxy) ───────
+// sdd-cors-proxy: custom Cloudflare Worker that returns raw HTML with CORS headers
+const CORS_PROXY = 'https://sdd-cors-proxy.watilde.workers.dev/?url=';
 
 async function fetchUrl() {
   const url = document.getElementById('urlInput').value.trim();
