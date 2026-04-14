@@ -1187,13 +1187,20 @@ async function fetchUrl() {
   if (!url) { setFetchStatus('Please enter a URL', 'err'); return; }
   const btn = document.getElementById('fetchBtn');
   btn.disabled = true; btn.textContent = 'Fetching…';
-  setFetchStatus('Fetching…', '');
+  setFetchStatus('⏳ Rendering page (JS execution via Browserless)…', '');
   try {
     const res = await fetch(CORS_PROXY + encodeURIComponent(url));
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     fetchedHtml = await res.text();
     fetchedUrl  = url;
-    setFetchStatus(`✓ Fetched — ${fetchedHtml.length.toLocaleString()} chars`, 'ok');
+    // レンダリングモードをヘッダーから取得して表示
+    const renderMode = res.headers.get('X-Render-Mode') || 'unknown';
+    const modeLabel = renderMode === 'browserless'
+      ? '🖥️ JS-rendered'
+      : renderMode === 'direct-fallback'
+      ? '⚠️ Static fallback'
+      : '📄 Static';
+    setFetchStatus(`✓ Fetched ${modeLabel} — ${fetchedHtml.length.toLocaleString()} chars`, 'ok');
   } catch(e) {
     setFetchStatus(`✗ ${e.message}`, 'err');
     fetchedHtml = '';
