@@ -1178,7 +1178,10 @@ function switchMode(mode) {
   document.getElementById('modeTabHtml').classList.toggle('active', mode === 'html');
 }
 
-// ── URL Fetch (allorigins.win CORSプロキシ) ──────
+// ── URL Fetch (allorigins.win — CORS proxy) ───────
+// allorigins.win/raw: returns raw HTML with CORS headers, no JSON wrapper
+const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
+
 async function fetchUrl() {
   const url = document.getElementById('urlInput').value.trim();
   if (!url) { setFetchStatus('Please enter a URL', 'err'); return; }
@@ -1186,12 +1189,9 @@ async function fetchUrl() {
   btn.disabled = true; btn.textContent = 'Fetching…';
   setFetchStatus('Fetching…', '');
   try {
-    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const res = await fetch(proxy);
+    const res = await fetch(CORS_PROXY + encodeURIComponent(url));
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (!data.contents) throw new Error('Empty response');
-    fetchedHtml = data.contents;
+    fetchedHtml = await res.text();
     fetchedUrl  = url;
     setFetchStatus(`✓ Fetched — ${fetchedHtml.length.toLocaleString()} chars`, 'ok');
   } catch(e) {
